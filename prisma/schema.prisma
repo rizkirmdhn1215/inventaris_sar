@@ -1,0 +1,139 @@
+// SAR Inventory System — Database Schema
+// Fullstack Next.js + PostgreSQL via Prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Admin Users ──────────────────────────────────────────
+model Admin {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @unique
+  password  String   // bcrypt hashed
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("admins")
+}
+
+// ─── Kategori Barang ──────────────────────────────────────
+model ItemCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  items Item[]
+
+  @@map("item_categories")
+}
+
+// ─── Master Barang (per jenis) ────────────────────────────
+model Item {
+  id          String   @id @default(uuid()) @db.Uuid
+  categoryId  String?  @map("category_id") @db.Uuid
+  name        String
+  description String?
+  imageUrl    String?  @map("image_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  category ItemCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  units    ItemUnit[]
+
+  @@map("items")
+}
+
+// ─── Unit Fisik (per stiker QR) ───────────────────────────
+model ItemUnit {
+  id        String   @id @default(uuid()) @db.Uuid
+  itemId    String   @map("item_id") @db.Uuid
+  qrCode    String   @unique @map("qr_code") // SAR-CHAINSAW-0001
+  condition String   @default("good") // good | damaged | lost
+  status    String   @default("available") // available | borrowed
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  item             Item              @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  loanItems        LoanItem[]
+  conditionReports ConditionReport[]
+
+  @@map("item_units")
+}
+
+// ─── Sesi Peminjaman ──────────────────────────────────────
+model Loan {
+  id                 String    @id @default(uuid()) @db.Uuid
+  borrowerName       String    @map("borrower_name")
+  borrowerDivision   String    @map("borrower_division")
+  purpose            String
+  borrowDate         DateTime  @map("borrow_date") @db.Date
+  expectedReturnDate DateTime  @map("expected_return_date") @db.Date
+  status             String    @default("pending") // pending | approved | returned
+  documentUrl        String?   @map("document_url") // URL PDF di MinIO
+  approvedBy         String?   @map("approved_by")
+  approvedAt         DateTime? @map("approved_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  loanItems    LoanItem[]
+  returnChecks ReturnCheck[]
+
+  @@map("loans")
+}
+
+// ─── Barang per Sesi Pinjam ───────────────────────────────
+model LoanItem {
+  id                String @id @default(uuid()) @db.Uuid
+  loanId            String @map("loan_id") @db.Uuid
+  itemUnitId        String @map("item_unit_id") @db.Uuid
+  conditionAtBorrow String @default("good") @map("condition_at_borrow")
+
+  loan     Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  itemUnit ItemUnit @relation(fields: [itemUnitId], references: [id])
+
+  @@map("loan_items")
+}
+
+// ─── Sesi Pengecekan Pengembalian ─────────────────────────
+model ReturnCheck {
+  id         String   @id @default(uuid()) @db.Uuid
+  loanId     String   @map("loan_id") @db.Uuid
+  checkedBy  String   @map("checked_by")
+  returnedAt DateTime @default(now()) @map("returned_at")
+
+  loan             Loan              @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  conditionReports ConditionReport[]
+
+  @@map("return_checks")
+}
+
+// ─── Laporan Kondisi per Unit saat Return ─────────────────
+model ConditionReport {
+  id               String   @id @default(uuid()) @db.Uuid
+  returnCheckId    String   @map("return_check_id") @db.Uuid
+  itemUnitId       String   @map("item_unit_id") @db.Uuid
+  conditionResult  String   @map("condition_result") // good | damaged | lost
+  damageDescription String? @map("damage_description")
+  photoUrls        String[] @map("photo_urls") // array URL foto di MinIO
+  severity         String?  // minor | major | total_loss
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  returnCheck ReturnCheck @relation(fields: [returnCheckId], references: [id], onDelete: Cascade)
+  itemUnit    ItemUnit    @relation(fields: [itemUnitId], references: [id])
+
+  @@map("condition_reports")
+}
+
+// ─── Push Notification Subscriptions ──────────────────────
+model PushSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("push_subscriptions")
+}
