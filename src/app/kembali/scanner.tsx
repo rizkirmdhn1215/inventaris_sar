@@ -60,8 +60,14 @@ export function KembaliScanner() {
     setScanning(true);
     try {
       const reader = new BrowserMultiFormatReader();
-      const controls = await reader.decodeFromVideoDevice(
-        undefined,
+      const controls = await reader.decodeFromConstraints(
+        {
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        },
         videoRef.current!,
         async (result) => {
           if (!result) return;
@@ -72,7 +78,9 @@ export function KembaliScanner() {
       controlsRef.current = controls;
     } catch (e) {
       console.error(e);
-      setError("Tidak bisa mengakses kamera. Cek izin browser.");
+      setError(
+        "Tidak bisa mengakses kamera. Cek izin browser, dan pastikan halaman dibuka via HTTPS."
+      );
       setScanning(false);
     }
   }
@@ -115,6 +123,7 @@ export function KembaliScanner() {
             ref={videoRef}
             className="w-full h-full object-cover"
             playsInline
+            autoPlay
             muted
           />
           {!scanning ? (

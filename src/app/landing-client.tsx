@@ -71,7 +71,7 @@ export function LandingClient({
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
+      <main className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-10 space-y-4 sm:space-y-6">
         {mode === "none" ? (
           <section className="text-center space-y-2 py-4 sm:py-8">
             <h1 className="text-2xl sm:text-4xl font-semibold text-white">
@@ -130,7 +130,7 @@ export function LandingClient({
         ) : null}
 
         {mode === "pinjam" ? (
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 sm:p-6">
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3 sm:p-6">
             <PinjamForm
               units={units}
               successRef={successRef}
@@ -140,7 +140,7 @@ export function LandingClient({
         ) : null}
 
         {mode === "kembali" ? (
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 sm:p-6">
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3 sm:p-6">
             <div className="max-w-md mx-auto">
               <KembaliScanner />
             </div>

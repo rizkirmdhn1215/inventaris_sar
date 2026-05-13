@@ -108,8 +108,15 @@ export function PinjamForm({
     setScanning(true);
     try {
       const reader = new BrowserMultiFormatReader();
-      const controls = await reader.decodeFromVideoDevice(
-        undefined,
+      // Prefer rear camera on phones; fall back to any available device.
+      const controls = await reader.decodeFromConstraints(
+        {
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        },
         videoRef.current!,
         (result) => {
           if (!result) return;
@@ -119,7 +126,9 @@ export function PinjamForm({
       controlsRef.current = controls;
     } catch (e) {
       console.error(e);
-      setScanError("Tidak bisa mengakses kamera. Cek izin browser.");
+      setScanError(
+        "Tidak bisa mengakses kamera. Cek izin browser, dan pastikan halaman dibuka via HTTPS."
+      );
       setScanning(false);
     }
   }
@@ -149,10 +158,12 @@ export function PinjamForm({
   })();
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
+    <div className="max-w-3xl mx-auto space-y-3 sm:space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Form Peminjaman</h1>
-        <p className="text-sm text-zinc-400 mt-1">
+        <h1 className="text-lg sm:text-2xl font-semibold text-white">
+          Form Peminjaman
+        </h1>
+        <p className="text-xs sm:text-sm text-zinc-400 mt-0.5">
           Isi data peminjam, lalu scan QR setiap barang yang ingin dipinjam.
         </p>
       </div>
@@ -169,8 +180,8 @@ export function PinjamForm({
         </p>
       ) : null}
 
-      <form action={createLoanRequestAction} className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <form action={createLoanRequestAction} className="space-y-3 sm:space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
           <input
             name="borrowerName"
             required
@@ -224,11 +235,12 @@ export function PinjamForm({
             </span>
           </div>
 
-          <div className="bg-black aspect-video relative">
+          <div className="bg-black aspect-square sm:aspect-video relative">
             <video
               ref={videoRef}
               className="w-full h-full object-cover"
               playsInline
+              autoPlay
               muted
             />
             {!scanning ? (
