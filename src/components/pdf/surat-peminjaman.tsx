@@ -21,7 +21,15 @@ function formatTanggalID(date: Date | string | null | undefined) {
 
 const styles = StyleSheet.create({
   page: { padding: 48, fontSize: 11, fontFamily: "Helvetica", color: "#0a0a0a" },
-  kopImage: { width: "100%", marginBottom: 16 },
+  // A4 portrait is 595pt wide; page padding is 48pt. We use explicit page
+  // width and negative margins so the letterhead image bleeds edge-to-edge.
+  kopImage: {
+    width: 595,
+    marginLeft: -48,
+    marginRight: -48,
+    marginTop: -48,
+    marginBottom: 16,
+  },
   kop: { borderBottomWidth: 2, borderBottomColor: "#ea580c", paddingBottom: 12, marginBottom: 16, textAlign: "center" },
   kopTitle: { fontSize: 14, fontWeight: 700 },
   kopSub: { fontSize: 10, color: "#525252", marginTop: 2 },
