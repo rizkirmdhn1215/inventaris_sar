@@ -252,20 +252,21 @@ export function PinjamForm({
         />
 
         {/* Scanner panel */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden">
-          <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-white">Scan QR Barang</p>
-              <p className="text-xs text-zinc-400">
-                Scan setiap unit yang ingin dipinjam, atau ketik kode manual.
-              </p>
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60">
+          <div className="overflow-hidden rounded-t-2xl">
+            <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-white">Scan QR Barang</p>
+                <p className="text-xs text-zinc-400">
+                  Scan setiap unit yang ingin dipinjam, atau ketik nama barang.
+                </p>
+              </div>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-200">
+                {selected.size} dipilih
+              </span>
             </div>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-200">
-              {selected.size} dipilih
-            </span>
-          </div>
 
-          <div className="bg-black aspect-square sm:aspect-video relative">
+            <div className="bg-black aspect-square sm:aspect-video relative">
             <video
               ref={videoRef}
               className="w-full h-full object-cover"
@@ -283,6 +284,7 @@ export function PinjamForm({
             ) : (
               <div className="absolute inset-x-12 top-1/2 -translate-y-1/2 h-24 sm:h-32 border-2 border-orange-500/70 rounded-xl pointer-events-none" />
             )}
+            </div>
           </div>
 
           <div className="p-3 space-y-2">
@@ -336,7 +338,7 @@ export function PinjamForm({
                 />
 
                 {manualOpen ? (
-                  <div className="absolute z-20 mt-1 left-0 right-0 max-h-72 overflow-auto rounded-lg border border-zinc-700 bg-zinc-950 shadow-xl">
+                  <div className="absolute z-50 mt-1 left-0 right-0 max-h-72 overflow-auto rounded-lg border border-zinc-700 bg-zinc-950 shadow-2xl">
                     {matchingUnits.length === 0 ? (
                       <p className="px-3 py-3 text-xs text-zinc-500 text-center">
                         {availableUnits.length === 0
