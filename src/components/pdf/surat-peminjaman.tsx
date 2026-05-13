@@ -46,10 +46,11 @@ const styles = StyleSheet.create({
   th: { padding: 6, fontWeight: 700, borderRightWidth: 1, borderRightColor: "#262626", fontSize: 10 },
   td: { padding: 6, borderRightWidth: 1, borderRightColor: "#262626", fontSize: 10 },
   tdLast: { padding: 6, fontSize: 10 },
-  signRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 40 },
+  signGroup: { marginTop: 24 },
+  signRow: { flexDirection: "row", justifyContent: "space-between" },
   signBox: { width: "40%", textAlign: "center" },
-  signLine: { marginTop: 60, borderTopWidth: 1, borderTopColor: "#0a0a0a", paddingTop: 4 },
-  signCenterRow: { flexDirection: "row", justifyContent: "center", marginTop: 32 },
+  signLine: { marginTop: 50, borderTopWidth: 1, borderTopColor: "#0a0a0a", paddingTop: 4 },
+  signCenterRow: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
   signCenterBox: { width: "40%", textAlign: "center" },
   watermark: {
     position: "absolute",
@@ -172,27 +173,29 @@ export function SuratPeminjamanDocument(props: SuratPeminjamanProps) {
           Demikian surat peminjaman ini dibuat untuk dipergunakan sebagaimana mestinya.
         </Text>
 
-        <View style={styles.signRow}>
-          <View style={styles.signBox}>
-            <Text>Peminjam,</Text>
-            <Text style={styles.signLine}>{props.borrowerSignerName}</Text>
-          </View>
-          <View style={styles.signBox}>
-            <Text>Padang, {formatTanggalID(new Date())}</Text>
-            <Text>Petugas Gudang,</Text>
-            <Text style={styles.signLine}>{props.adminSignerName}</Text>
-          </View>
-        </View>
-
-        {props.kepalaGudangName ? (
-          <View style={styles.signCenterRow}>
-            <View style={styles.signCenterBox}>
-              <Text>Mengetahui,</Text>
-              <Text>Kepala Gudang,</Text>
-              <Text style={styles.signLine}>{props.kepalaGudangName}</Text>
+        <View style={styles.signGroup} wrap={false}>
+          <View style={styles.signRow}>
+            <View style={styles.signBox}>
+              <Text>Peminjam,</Text>
+              <Text style={styles.signLine}>{props.borrowerSignerName}</Text>
+            </View>
+            <View style={styles.signBox}>
+              <Text>Padang, {formatTanggalID(new Date())}</Text>
+              <Text>Petugas Gudang,</Text>
+              <Text style={styles.signLine}>{props.adminSignerName}</Text>
             </View>
           </View>
-        ) : null}
+
+          {props.kepalaGudangName ? (
+            <View style={styles.signCenterRow}>
+              <View style={styles.signCenterBox}>
+                <Text>Mengetahui,</Text>
+                <Text>Kepala Gudang,</Text>
+                <Text style={styles.signLine}>{props.kepalaGudangName}</Text>
+              </View>
+            </View>
+          ) : null}
+        </View>
       </Page>
     </Document>
   );
