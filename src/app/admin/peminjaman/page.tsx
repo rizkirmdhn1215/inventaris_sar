@@ -95,7 +95,14 @@ export default async function PeminjamanPage({
                     href={`/admin/peminjaman/${loan.id}`}
                     className="block w-full"
                   >
-                    {loan.borrowerName}
+                    <div className="flex items-center gap-2">
+                      <span>{loan.borrowerName}</span>
+                      {loan.loanType === "external" ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                          EKSTERNAL
+                        </span>
+                      ) : null}
+                    </div>
                   </Link>
                 </td>
                 <td className="px-4 py-2 text-zinc-300">
@@ -103,7 +110,9 @@ export default async function PeminjamanPage({
                     href={`/admin/peminjaman/${loan.id}`}
                     className="block w-full"
                   >
-                    {loan.borrowerDivision}
+                    {loan.loanType === "external" && loan.instansi
+                      ? loan.instansi
+                      : loan.borrowerDivision}
                   </Link>
                 </td>
                 <td className="px-4 py-2 text-zinc-300">

@@ -26,10 +26,12 @@ export function PinjamForm({
   units,
   successRef,
   errorMessage,
+  external = false,
 }: {
   units: UnitOption[];
   successRef?: string;
   errorMessage?: string;
+  external?: boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [scanning, setScanning] = useState(false);
@@ -175,10 +177,12 @@ export function PinjamForm({
     <div className="max-w-3xl mx-auto space-y-3 sm:space-y-4">
       <div>
         <h1 className="text-lg sm:text-2xl font-semibold text-white">
-          Form Peminjaman
+          {external ? "Form Peminjaman Eksternal" : "Form Peminjaman"}
         </h1>
         <p className="text-xs sm:text-sm text-zinc-400 mt-0.5">
-          Isi data peminjam, lalu scan QR setiap barang yang ingin dipinjam.
+          {external
+            ? "Untuk peminjam dari instansi lain (di luar Tim SAR Padang). Lengkapi data instansi & nomor surat resmi."
+            : "Isi data peminjam, lalu scan QR setiap barang yang ingin dipinjam."}
         </p>
       </div>
 
@@ -211,17 +215,51 @@ export function PinjamForm({
       ) : null}
 
       <form action={createLoanRequestAction} className="space-y-3 sm:space-y-4">
+        <input type="hidden" name="loanType" value={external ? "external" : "internal"} />
+
+        {external ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 rounded-xl border border-orange-900/30 bg-orange-950/10 p-3">
+            <input
+              name="instansi"
+              required
+              placeholder="Instansi / Lembaga"
+              className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
+            />
+            <input
+              name="externalLetterNumber"
+              required
+              placeholder="No. Surat (mis: 005/SAR-EXT/X/2026)"
+              className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono"
+            />
+            <input
+              name="contactPerson"
+              required
+              placeholder="Contact Person"
+              className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
+            />
+            <input
+              name="contactVia"
+              required
+              placeholder="Kontak via (HP/WA/Email)"
+              className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
+            />
+            <p className="sm:col-span-2 text-[11px] text-orange-200/80">
+              Nomor surat di atas akan digunakan sebagai nomor pada surat peminjaman PDF.
+            </p>
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
           <input
             name="borrowerName"
             required
-            placeholder="Nama lengkap"
+            placeholder={external ? "Nama lengkap penanggung jawab" : "Nama lengkap"}
             className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
           />
           <input
             name="borrowerDivision"
             required
-            placeholder="Divisi / Satuan"
+            placeholder={external ? "Jabatan / Satuan" : "Divisi / Satuan"}
             className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
           />
           <label className="text-xs text-zinc-400 space-y-1">

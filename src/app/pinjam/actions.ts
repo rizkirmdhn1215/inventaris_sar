@@ -12,6 +12,18 @@ export async function createLoanRequestAction(formData: FormData) {
   const expectedReturnDate = String(formData.get("expectedReturnDate") ?? "").trim();
   const itemUnitIds = formData.getAll("itemUnitId").map((v) => String(v));
 
+  const loanType =
+    String(formData.get("loanType") ?? "internal").trim() === "external"
+      ? "external"
+      : "internal";
+  const instansi = String(formData.get("instansi") ?? "").trim() || null;
+  const externalLetterNumber =
+    String(formData.get("externalLetterNumber") ?? "").trim() || null;
+  const contactPerson = String(formData.get("contactPerson") ?? "").trim() || null;
+  const contactVia = String(formData.get("contactVia") ?? "").trim() || null;
+
+  const backPath = loanType === "external" ? "/?mode=external" : "/?mode=pinjam";
+
   if (
     !borrowerName ||
     !borrowerDivision ||
@@ -19,11 +31,19 @@ export async function createLoanRequestAction(formData: FormData) {
     !borrowDate ||
     !expectedReturnDate
   ) {
-    redirect("/pinjam?error=Lengkapi%20semua%20field%20wajib");
+    redirect(`${backPath}&error=Lengkapi%20semua%20field%20wajib`);
+  }
+
+  if (loanType === "external") {
+    if (!instansi || !externalLetterNumber || !contactPerson || !contactVia) {
+      redirect(
+        `${backPath}&error=Lengkapi%20instansi%2C%20no%20surat%2C%20kontak%20person%2C%20dan%20kontak%20via`
+      );
+    }
   }
 
   if (itemUnitIds.length === 0) {
-    redirect("/pinjam?error=Pilih%20minimal%201%20barang");
+    redirect(`${backPath}&error=Pilih%20minimal%201%20barang`);
   }
 
   const units = await db.itemUnit.findMany({
@@ -32,7 +52,7 @@ export async function createLoanRequestAction(formData: FormData) {
   });
 
   if (units.length !== itemUnitIds.length) {
-    redirect("/pinjam?error=Sebagian%20barang%20sudah%20tidak%20tersedia");
+    redirect(`${backPath}&error=Sebagian%20barang%20sudah%20tidak%20tersedia`);
   }
 
   const loan = await db.loan.create({
@@ -43,6 +63,11 @@ export async function createLoanRequestAction(formData: FormData) {
       borrowDate: new Date(borrowDate),
       expectedReturnDate: new Date(expectedReturnDate),
       status: "pending",
+      loanType,
+      instansi,
+      externalLetterNumber,
+      contactPerson,
+      contactVia,
     },
   });
 

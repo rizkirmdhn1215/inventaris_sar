@@ -78,11 +78,17 @@ export async function GET(
     },
   });
   const autoLetterNumber = `SAR.PP/INV/${loanYear}/${String(earlierThisYear).padStart(3, "0")}`;
+  // Priority for letter number on the PDF:
+  // 1. Manual override saved by admin in document editor (meta.letterNumber)
+  // 2. Number provided by external borrower at submission (loan.externalLetterNumber)
+  // 3. Auto-incremented internal number
+  const resolvedLetterNumber =
+    meta.letterNumber || loan.externalLetterNumber || autoLetterNumber;
 
   const kopImage = await loadKopImage();
   const buffer = await renderToBuffer(
     SuratPeminjamanDocument({
-      letterNumber: meta.letterNumber || autoLetterNumber,
+      letterNumber: resolvedLetterNumber,
       letterBody: meta.letterBody || "",
       borrowerName: loan.borrowerName,
       borrowerDivision: loan.borrowerDivision,

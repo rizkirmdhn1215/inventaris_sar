@@ -20,8 +20,8 @@ export default async function Home({ searchParams }: HomeProps) {
     take: 200,
   });
 
-  const initialMode: "none" | "pinjam" | "kembali" =
-    params.mode === "pinjam" || params.mode === "kembali" ? params.mode : "none";
+  const initialMode: "none" | "pinjam" | "external" =
+    params.mode === "pinjam" || params.mode === "external" ? params.mode : "none";
 
   return (
     <LandingClient

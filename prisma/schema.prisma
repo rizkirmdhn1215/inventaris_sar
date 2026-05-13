@@ -79,6 +79,12 @@ model Loan {
   documentUrl        String?   @map("document_url") // URL PDF di MinIO
   approvedBy         String?   @map("approved_by")
   approvedAt         DateTime? @map("approved_at")
+  loanType           String    @default("internal") @map("loan_type") // internal | external
+  instansi           String?
+  externalLetterNumber String? @map("external_letter_number")
+  contactPerson      String?   @map("contact_person")
+  contactVia         String?   @map("contact_via")
+  extendedCount      Int       @default(0) @map("extended_count")
   createdAt          DateTime  @default(now()) @map("created_at")
 
   loanItems    LoanItem[]

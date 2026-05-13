@@ -119,3 +119,45 @@ export async function approveLoanAction(formData: FormData) {
   revalidatePath("/admin/peminjaman");
   redirect(`/admin/peminjaman/${loanId}?success=approved`);
 }
+
+export async function extendLoanDeadlineAction(formData: FormData) {
+  const loanId = String(formData.get("loanId") ?? "");
+  const newDate = String(formData.get("newReturnDate") ?? "").trim();
+  const reason = String(formData.get("extendReason") ?? "").trim();
+
+  if (!loanId || !newDate) {
+    redirect(`/admin/peminjaman/${loanId}?error=Tanggal%20baru%20wajib%20diisi`);
+  }
+
+  const loan = await db.loan.findUnique({ where: { id: loanId } });
+  if (!loan) {
+    redirect("/admin/peminjaman?error=Loan%20tidak%20ditemukan");
+  }
+
+  const parsed = new Date(newDate);
+  if (Number.isNaN(parsed.getTime())) {
+    redirect(`/admin/peminjaman/${loanId}?error=Tanggal%20tidak%20valid`);
+  }
+  if (parsed <= loan!.expectedReturnDate) {
+    redirect(
+      `/admin/peminjaman/${loanId}?error=Tanggal%20baru%20harus%20setelah%20rencana%20kembali%20saat%20ini`
+    );
+  }
+
+  await db.loan.update({
+    where: { id: loanId },
+    data: {
+      expectedReturnDate: parsed,
+      extendedCount: { increment: 1 },
+      purpose: reason
+        ? `${loan!.purpose}\n\n[Perpanjangan ${new Date()
+            .toISOString()
+            .slice(0, 10)}] ${reason}`
+        : loan!.purpose,
+    },
+  });
+
+  revalidatePath(`/admin/peminjaman/${loanId}`);
+  revalidatePath("/admin/peminjaman");
+  redirect(`/admin/peminjaman/${loanId}?success=extended`);
+}

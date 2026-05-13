@@ -9,10 +9,9 @@ import {
   RotateCcw,
   ChevronLeft,
   ClipboardList,
-  QrCode,
+  Building2,
 } from "lucide-react";
 import { PinjamForm } from "./pinjam/pinjam-form";
-import { KembaliScanner } from "./kembali/scanner";
 
 type UnitOption = {
   id: string;
@@ -26,10 +25,10 @@ type LandingClientProps = {
   units: UnitOption[];
   successRef?: string;
   errorMessage?: string;
-  initialMode?: "none" | "pinjam" | "kembali";
+  initialMode?: "none" | "pinjam" | "external";
 };
 
-type Mode = "none" | "pinjam" | "kembali";
+type Mode = "none" | "pinjam" | "external";
 
 export function LandingClient({
   units,
@@ -38,7 +37,7 @@ export function LandingClient({
   initialMode = "none",
 }: LandingClientProps) {
   const [mode, setMode] = useState<Mode>(
-    successRef ? "pinjam" : initialMode
+    successRef ? initialMode || "pinjam" : initialMode
   );
 
   return (
@@ -93,27 +92,27 @@ export function LandingClient({
         >
           <ServiceCard
             active={mode === "pinjam"}
-            collapsed={mode === "kembali"}
+            collapsed={mode === "external"}
             disabled={false}
             onClick={() =>
               setMode((m) => (m === "pinjam" ? "none" : "pinjam"))
             }
             icon={<ClipboardList className="w-5 h-5 sm:w-6 sm:h-6" />}
-            title="Peminjaman Barang"
-            description="Ajukan permintaan peminjaman barang operasional. Isi data peminjam & pilih unit yang tersedia."
+            title="Peminjaman Internal"
+            description="Untuk Tim SAR Padang. Ajukan permintaan peminjaman barang operasional."
             cta="Mulai Pinjam"
           />
           <ServiceCard
-            active={mode === "kembali"}
+            active={mode === "external"}
             collapsed={mode === "pinjam"}
             disabled={false}
             onClick={() =>
-              setMode((m) => (m === "kembali" ? "none" : "kembali"))
+              setMode((m) => (m === "external" ? "none" : "external"))
             }
-            icon={<QrCode className="w-5 h-5 sm:w-6 sm:h-6" />}
-            title="Cek Pengembalian"
-            description="Scan QR setiap barang yang dikembalikan untuk diperiksa petugas gudang."
-            cta="Mulai Scan"
+            icon={<Building2 className="w-5 h-5 sm:w-6 sm:h-6" />}
+            title="Peminjaman Eksternal"
+            description="Untuk instansi lain di luar Tim SAR. Sertakan instansi, nomor surat & contact person."
+            cta="Mulai Pinjam"
           />
         </div>
 
@@ -139,11 +138,14 @@ export function LandingClient({
           </section>
         ) : null}
 
-        {mode === "kembali" ? (
+        {mode === "external" ? (
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3 sm:p-6">
-            <div className="max-w-md mx-auto">
-              <KembaliScanner />
-            </div>
+            <PinjamForm
+              external
+              units={units}
+              successRef={successRef}
+              errorMessage={errorMessage}
+            />
           </section>
         ) : null}
 
@@ -156,8 +158,8 @@ export function LandingClient({
             />
             <InfoCard
               icon={<RotateCcw className="w-4 h-4 text-orange-400" />}
-              title="Mudah dikembalikan"
-              body="Cukup scan QR—tidak perlu isi formulir manual."
+              title="Pengembalian by Admin"
+              body="Cek pengembalian dilakukan petugas gudang via panel admin."
             />
             <InfoCard
               icon={<Shield className="w-4 h-4 text-orange-400" />}

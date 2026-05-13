@@ -14,11 +14,13 @@ export function DocumentEditor({
   loanId,
   borrowerName,
   adminDefaultName,
+  defaultLetterNumber,
   initialItems,
 }: {
   loanId: string;
   borrowerName: string;
   adminDefaultName: string;
+  defaultLetterNumber?: string;
   initialItems: ItemRow[];
 }) {
   const [items, setItems] = useState(initialItems);
@@ -26,9 +28,10 @@ export function DocumentEditor({
 
   const today = new Date().toISOString().slice(0, 10);
   const defaultLetterNo = useMemo(() => {
+    if (defaultLetterNumber) return defaultLetterNumber;
     const year = new Date().getFullYear();
     return `SAR/INV/${year}/001`;
-  }, []);
+  }, [defaultLetterNumber]);
 
   const orderedIds = items.map((item) => item.loanItemId).join(",");
 
