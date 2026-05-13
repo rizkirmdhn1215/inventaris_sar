@@ -10,6 +10,7 @@ import {
   Search,
   AlertTriangle,
   Check,
+  FileText,
 } from "lucide-react";
 import { createLoanRequestAction } from "./actions";
 
@@ -37,9 +38,8 @@ export function PinjamForm({
     type: "ok" | "warn";
     msg: string;
   } | null>(null);
-  const [manualCode, setManualCode] = useState("");
-  const [showFullList, setShowFullList] = useState(false);
-  const [search, setSearch] = useState("");
+  const [manualQuery, setManualQuery] = useState("");
+  const [manualOpen, setManualOpen] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
@@ -139,22 +139,36 @@ export function PinjamForm({
     setScanning(false);
   }
 
-  function handleManualSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    addByQrCode(manualCode);
-    setManualCode("");
+  function addUnit(unit: UnitOption) {
+    if (selected.has(unit.id)) {
+      setScanFeedback({
+        type: "warn",
+        msg: `${unit.itemName} (${unit.qrCode}) sudah dipilih.`,
+      });
+      return;
+    }
+    setSelected((prev) => new Set(prev).add(unit.id));
+    setScanFeedback({
+      type: "ok",
+      msg: `Ditambahkan: ${unit.itemName} (${unit.qrCode})`,
+    });
+    setManualQuery("");
+    setManualOpen(false);
   }
 
   const selectedUnits = units.filter((u) => selected.has(u.id));
-  const filteredList = (() => {
-    if (!search.trim()) return units;
-    const q = search.trim().toLowerCase();
-    return units.filter(
-      (u) =>
-        u.qrCode.toLowerCase().includes(q) ||
-        u.itemName.toLowerCase().includes(q) ||
-        (u.categoryName ?? "").toLowerCase().includes(q)
-    );
+  const availableUnits = units.filter((u) => !selected.has(u.id));
+  const matchingUnits = (() => {
+    const q = manualQuery.trim().toLowerCase();
+    const list = q
+      ? availableUnits.filter(
+          (u) =>
+            u.itemName.toLowerCase().includes(q) ||
+            u.qrCode.toLowerCase().includes(q) ||
+            (u.categoryName ?? "").toLowerCase().includes(q)
+        )
+      : availableUnits;
+    return list.slice(0, 30);
   })();
 
   return (
@@ -169,9 +183,25 @@ export function PinjamForm({
       </div>
 
       {successRef ? (
-        <p className="text-sm text-emerald-300 bg-emerald-950/40 border border-emerald-900/40 rounded-lg px-3 py-2">
-          Request berhasil dikirim. Nomor referensi: <strong>{successRef}</strong>
-        </p>
+        <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/40 px-3 py-3 space-y-2">
+          <p className="text-sm text-emerald-300">
+            Request berhasil dikirim. Nomor referensi:{" "}
+            <strong className="font-mono">{successRef}</strong>
+          </p>
+          <p className="text-xs text-emerald-200/80">
+            Berikut draft surat peminjaman. Setelah disetujui admin, surat resmi
+            (tanpa watermark DRAFT) akan diberikan.
+          </p>
+          <a
+            href={`/api/loans/${successRef}/pdf?draft=1`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 px-3 py-1.5 text-xs font-medium text-white"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            Lihat / Unduh Draft Surat
+          </a>
+        </div>
       ) : null}
 
       {errorMessage ? (
@@ -276,26 +306,74 @@ export function PinjamForm({
               )}
             </div>
 
-            <div className="flex gap-2">
-              <input
-                value={manualCode}
-                onChange={(e) => setManualCode(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleManualSubmit(e);
+            <div className="space-y-1.5">
+              <p className="text-xs text-zinc-400">
+                Atau ketik / pilih barang manual:
+              </p>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-zinc-500" />
+                <input
+                  value={manualQuery}
+                  onChange={(e) => {
+                    setManualQuery(e.target.value);
+                    setManualOpen(true);
+                  }}
+                  onFocus={() => setManualOpen(true)}
+                  onBlur={() =>
+                    // delay so click on list item still fires
+                    setTimeout(() => setManualOpen(false), 150)
                   }
-                }}
-                placeholder="Ketik kode QR (mis. SAR-MEDKIT-0001)"
-                className="flex-1 rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white font-mono"
-              />
-              <button
-                type="button"
-                onClick={(e) => handleManualSubmit(e)}
-                className="rounded-lg border border-zinc-700 hover:border-zinc-600 px-3 py-2 text-sm text-zinc-100 inline-flex items-center gap-1"
-              >
-                <Plus className="w-4 h-4" /> Tambah
-              </button>
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && matchingUnits.length > 0) {
+                      e.preventDefault();
+                      addUnit(matchingUnits[0]);
+                    } else if (e.key === "Escape") {
+                      setManualOpen(false);
+                    }
+                  }}
+                  placeholder="Cari nama barang, kode QR, atau kategori..."
+                  className="w-full rounded-lg bg-zinc-950 border border-zinc-800 pl-8 pr-3 py-2 text-sm text-white"
+                />
+
+                {manualOpen ? (
+                  <div className="absolute z-20 mt-1 left-0 right-0 max-h-72 overflow-auto rounded-lg border border-zinc-700 bg-zinc-950 shadow-xl">
+                    {matchingUnits.length === 0 ? (
+                      <p className="px-3 py-3 text-xs text-zinc-500 text-center">
+                        {availableUnits.length === 0
+                          ? "Semua barang sudah dipilih."
+                          : "Tidak ada hasil."}
+                      </p>
+                    ) : (
+                      <ul className="py-1">
+                        {matchingUnits.map((unit) => (
+                          <li key={unit.id}>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => addUnit(unit)}
+                              className="w-full text-left px-3 py-2 hover:bg-zinc-800 flex items-center gap-2"
+                            >
+                              <Plus className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm text-zinc-100 truncate">
+                                  {unit.itemName}
+                                </p>
+                                <p className="text-[11px] text-zinc-500 font-mono truncate">
+                                  {unit.qrCode} · {unit.categoryName ?? "-"} ·{" "}
+                                  {unit.condition}
+                                </p>
+                              </div>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+              <p className="text-[10px] text-zinc-500">
+                Tekan Enter untuk pilih hasil teratas.
+              </p>
             </div>
 
             {scanFeedback ? (
@@ -364,80 +442,6 @@ export function PinjamForm({
               ))}
             </ul>
           )}
-        </div>
-
-        {/* Fallback: browse full list */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setShowFullList((v) => !v)}
-            className="w-full px-4 py-2 text-left text-xs text-zinc-400 hover:text-zinc-200 flex items-center justify-between"
-          >
-            <span>
-              {showFullList ? "Sembunyikan" : "Lihat"} daftar lengkap barang tersedia ({units.length})
-            </span>
-            <span>{showFullList ? "▾" : "▸"}</span>
-          </button>
-
-          {showFullList ? (
-            <div className="px-3 pb-3 space-y-2">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-zinc-500" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Cari nama / QR / kategori"
-                  className="w-full rounded-lg bg-zinc-950 border border-zinc-800 pl-8 pr-3 py-2 text-xs text-white"
-                />
-              </div>
-              <div className="max-h-72 overflow-auto space-y-1">
-                {filteredList.map((unit) => {
-                  const isSelected = selected.has(unit.id);
-                  return (
-                    <button
-                      key={unit.id}
-                      type="button"
-                      onClick={() =>
-                        isSelected
-                          ? removeSelected(unit.id)
-                          : addByQrCode(unit.qrCode)
-                      }
-                      className={`w-full text-left flex items-center gap-3 rounded-lg border px-3 py-2 ${
-                        isSelected
-                          ? "border-orange-500/60 bg-orange-500/10"
-                          : "border-zinc-800 hover:bg-zinc-800/40"
-                      }`}
-                    >
-                      <div
-                        className={`w-4 h-4 rounded border flex items-center justify-center ${
-                          isSelected
-                            ? "bg-orange-500 border-orange-500"
-                            : "border-zinc-600"
-                        }`}
-                      >
-                        {isSelected ? (
-                          <Check className="w-3 h-3 text-white" />
-                        ) : null}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm text-zinc-100 truncate">
-                          {unit.itemName}
-                        </p>
-                        <p className="text-xs text-zinc-400 truncate">
-                          {unit.qrCode} · {unit.categoryName ?? "-"} · {unit.condition}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-                {filteredList.length === 0 ? (
-                  <p className="text-xs text-zinc-500 text-center py-4">
-                    Tidak ada hasil.
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
         </div>
 
         <button

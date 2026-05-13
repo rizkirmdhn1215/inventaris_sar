@@ -4,6 +4,7 @@ import {
   Text,
   View,
   StyleSheet,
+  Image,
 } from "@react-pdf/renderer";
 
 const ID_MONTHS = [
@@ -20,6 +21,7 @@ function formatTanggalID(date: Date | string | null | undefined) {
 
 const styles = StyleSheet.create({
   page: { padding: 48, fontSize: 11, fontFamily: "Helvetica", color: "#0a0a0a" },
+  kopImage: { width: "100%", marginBottom: 16 },
   kop: { borderBottomWidth: 2, borderBottomColor: "#ea580c", paddingBottom: 12, marginBottom: 16, textAlign: "center" },
   kopTitle: { fontSize: 14, fontWeight: 700 },
   kopSub: { fontSize: 10, color: "#525252", marginTop: 2 },
@@ -39,6 +41,21 @@ const styles = StyleSheet.create({
   signRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 40 },
   signBox: { width: "40%", textAlign: "center" },
   signLine: { marginTop: 60, borderTopWidth: 1, borderTopColor: "#0a0a0a", paddingTop: 4 },
+  watermark: {
+    position: "absolute",
+    top: "35%",
+    left: 0,
+    right: 0,
+    textAlign: "center",
+    transform: "rotate(-30deg)",
+  },
+  watermarkText: {
+    fontSize: 140,
+    fontWeight: 700,
+    color: "#dc2626",
+    opacity: 0.15,
+    letterSpacing: 8,
+  },
 });
 
 export type SuratPeminjamanProps = {
@@ -52,17 +69,33 @@ export type SuratPeminjamanProps = {
   borrowerSignerName: string;
   adminSignerName: string;
   items: { itemName: string; qrCode: string; condition: string }[];
+  /**
+   * Optional letterhead image (PNG/JPG Buffer). If provided, used as header.
+   * Otherwise a text header is rendered.
+   */
+  kopImage?: Buffer | null;
+  /** If true, render a "DRAFT" watermark across the page. */
+  isDraft?: boolean;
 };
 
 export function SuratPeminjamanDocument(props: SuratPeminjamanProps) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <View style={styles.kop}>
-          <Text style={styles.kopTitle}>BADAN NASIONAL PENCARIAN DAN PERTOLONGAN</Text>
-          <Text style={styles.kopTitle}>KANTOR PENCARIAN DAN PERTOLONGAN PADANG</Text>
-          <Text style={styles.kopSub}>Jl. Adinegoro Km. 17, Padang - Sumatera Barat</Text>
-        </View>
+        {props.isDraft ? (
+          <View style={styles.watermark} fixed>
+            <Text style={styles.watermarkText}>DRAFT</Text>
+          </View>
+        ) : null}
+        {props.kopImage ? (
+          <Image style={styles.kopImage} src={props.kopImage} />
+        ) : (
+          <View style={styles.kop}>
+            <Text style={styles.kopTitle}>BADAN NASIONAL PENCARIAN DAN PERTOLONGAN</Text>
+            <Text style={styles.kopTitle}>KANTOR PENCARIAN DAN PERTOLONGAN PADANG</Text>
+            <Text style={styles.kopSub}>Jl. Adinegoro Km. 17, Padang - Sumatera Barat</Text>
+          </View>
+        )}
 
         <Text style={styles.judul}>SURAT PEMINJAMAN BARANG OPERASIONAL</Text>
         <Text style={styles.nomor}>Nomor: {props.letterNumber}</Text>
