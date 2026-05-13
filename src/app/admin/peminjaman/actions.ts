@@ -11,6 +11,7 @@ export async function approveLoanAction(formData: FormData) {
   const loanId = String(formData.get("loanId") ?? "");
   const adminSignerName = String(formData.get("adminSignerName") ?? "").trim();
   const borrowerSignerName = String(formData.get("borrowerSignerName") ?? "").trim();
+  const kepalaGudangName = String(formData.get("kepalaGudangName") ?? "").trim() || "ALVIZAN Z., S.H.";
   const letterNumber = String(formData.get("letterNumber") ?? "").trim();
   const letterBody = String(formData.get("letterBody") ?? "").trim();
   const orderedLoanItemIdsRaw = String(formData.get("orderedLoanItemIds") ?? "");
@@ -59,6 +60,7 @@ export async function approveLoanAction(formData: FormData) {
         expectedReturnDate: loan!.expectedReturnDate,
         borrowerSignerName,
         adminSignerName,
+        kepalaGudangName,
         items: sortedItems.map((li) => ({
           itemName: li.itemUnit.item.name,
           qrCode: li.itemUnit.qrCode,
@@ -99,6 +101,7 @@ export async function approveLoanAction(formData: FormData) {
           letterBody,
           borrowerSignerName,
           adminSignerName,
+          kepalaGudangName,
           orderedLoanItemIds,
           pdfUrl: documentUrl,
         }),

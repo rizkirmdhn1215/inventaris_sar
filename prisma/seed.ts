@@ -8,17 +8,20 @@ async function main() {
   
   const hashedPassword = await hash('password123', 12);
   
-  const admin = await prisma.admin.upsert({
-    where: { email: 'admin@sarpadang.go.id' },
-    update: {},
-    create: {
-      email: 'admin@sarpadang.go.id',
-      password: hashedPassword,
-      name: 'Super Admin',
-    },
-  });
+  const admins = [
+    { email: 'admin@sarpadang.go.id', name: 'Super Admin' },
+    { email: 'ryan@sarpadang.go.id', name: 'RYAN AGUS SYAPUTRA' },
+    { email: 'hari@sarpadang.go.id', name: 'HARI AGUSTIAN, S.A.P.' },
+  ];
 
-  console.log(`Admin created: ${admin.email}`);
+  for (const a of admins) {
+    const created = await prisma.admin.upsert({
+      where: { email: a.email },
+      update: { name: a.name },
+      create: { email: a.email, password: hashedPassword, name: a.name },
+    });
+    console.log(`Admin upserted: ${created.email} (${created.name})`);
+  }
   
   // Seed sample categories
   const categories = [

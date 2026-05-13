@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { Package, Warehouse, ArrowRightLeft, Plus, Trash2, AlertTriangle } from "lucide-react";
-import { upsertItemAction, deleteItemAction } from "./actions";
+import { Package, Warehouse, ArrowRightLeft, Plus, AlertTriangle } from "lucide-react";
+import { upsertItemAction } from "./actions";
 import { STATUS_COLOR } from "@/lib/format";
 import { QrViewerButton } from "./qr-viewer";
+import { EditableItemRow } from "./editable-row";
 
 type BarangPageProps = {
   searchParams: Promise<{ status?: string; tab?: string }>;
@@ -95,13 +96,8 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
             <input
               name="name"
               required
-              placeholder="Nama barang (contoh: Chainsaw)"
-              className="md:col-span-4 rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
-            />
-            <input
-              name="description"
-              placeholder="Deskripsi (opsional)"
-              className="md:col-span-5 rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
+              placeholder="Nama barang"
+              className="md:col-span-3 rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
             />
             <select
               name="categoryId"
@@ -115,12 +111,32 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
                 </option>
               ))}
             </select>
+            <input
+              name="merk"
+              placeholder="Merk"
+              className="md:col-span-2 rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
+            />
+            <input
+              name="type"
+              placeholder="Type"
+              className="md:col-span-2 rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
+            />
+            <input
+              name="kodeGudang"
+              placeholder="Kode Gudang"
+              className="md:col-span-2 rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
+            />
             <button
               type="submit"
               className="md:col-span-1 inline-flex items-center justify-center gap-1 rounded-lg bg-orange-600 hover:bg-orange-500 px-3 py-2 text-sm text-white"
             >
               <Plus className="w-4 h-4" />
             </button>
+            <input
+              name="description"
+              placeholder="Deskripsi (opsional)"
+              className="md:col-span-12 rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
+            />
           </form>
 
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden">
@@ -130,6 +146,9 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
                   <tr>
                     <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Nama</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Kategori</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Merk</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Type</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Kode Gudang</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Deskripsi</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Unit</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Aksi</th>
@@ -137,28 +156,26 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
                 </thead>
                 <tbody>
                   {items.map((item) => (
-                    <tr key={item.id} className="border-b border-zinc-800/80 last:border-0">
-                      <td className="px-4 py-2 text-zinc-100">{item.name}</td>
-                      <td className="px-4 py-2 text-zinc-300">{item.category?.name ?? "-"}</td>
-                      <td className="px-4 py-2 text-zinc-400 max-w-xs truncate">{item.description ?? "-"}</td>
-                      <td className="px-4 py-2 text-zinc-300">{item._count.units}</td>
-                      <td className="px-4 py-2">
-                        <form action={deleteItemAction}>
-                          <input type="hidden" name="id" value={item.id} />
-                          <button
-                            type="submit"
-                            className="inline-flex items-center gap-1 text-xs text-red-300 hover:text-red-200"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" /> Hapus
-                          </button>
-                        </form>
-                      </td>
-                    </tr>
+                    <EditableItemRow
+                      key={item.id}
+                      item={{
+                        id: item.id,
+                        name: item.name,
+                        description: item.description,
+                        merk: item.merk,
+                        type: item.type,
+                        kodeGudang: item.kodeGudang,
+                        categoryId: item.categoryId,
+                        category: item.category ? { name: item.category.name } : null,
+                        unitCount: item._count.units,
+                      }}
+                      categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+                    />
                   ))}
                   {items.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-10 text-center text-sm text-zinc-500">
-                        Belum ada master barang.
+                      <td colSpan={8} className="px-4 py-10 text-center text-sm text-zinc-500">
+                        Belum ada master barang. Klik dua kali baris untuk edit.
                       </td>
                     </tr>
                   ) : null}

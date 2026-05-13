@@ -49,6 +49,8 @@ const styles = StyleSheet.create({
   signRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 40 },
   signBox: { width: "40%", textAlign: "center" },
   signLine: { marginTop: 60, borderTopWidth: 1, borderTopColor: "#0a0a0a", paddingTop: 4 },
+  signCenterRow: { flexDirection: "row", justifyContent: "center", marginTop: 32 },
+  signCenterBox: { width: "40%", textAlign: "center" },
   watermark: {
     position: "absolute",
     top: "35%",
@@ -76,6 +78,7 @@ export type SuratPeminjamanProps = {
   expectedReturnDate: Date | string;
   borrowerSignerName: string;
   adminSignerName: string;
+  kepalaGudangName?: string;
   items: { itemName: string; qrCode: string; condition: string }[];
   /**
    * Optional letterhead image (PNG/JPG Buffer). If provided, used as header.
@@ -180,6 +183,16 @@ export function SuratPeminjamanDocument(props: SuratPeminjamanProps) {
             <Text style={styles.signLine}>{props.adminSignerName}</Text>
           </View>
         </View>
+
+        {props.kepalaGudangName ? (
+          <View style={styles.signCenterRow}>
+            <View style={styles.signCenterBox}>
+              <Text>Mengetahui,</Text>
+              <Text>Kepala Gudang,</Text>
+              <Text style={styles.signLine}>{props.kepalaGudangName}</Text>
+            </View>
+          </View>
+        ) : null}
       </Page>
     </Document>
   );

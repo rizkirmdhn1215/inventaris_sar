@@ -50,6 +50,7 @@ export async function GET(
     letterBody?: string;
     borrowerSignerName?: string;
     adminSignerName?: string;
+    kepalaGudangName?: string;
     orderedLoanItemIds?: string[];
   } = {};
   try {
@@ -94,6 +95,7 @@ export async function GET(
         loan.approvedBy ||
         session?.name ||
         "(Belum disetujui)",
+      kepalaGudangName: meta.kepalaGudangName || "ALVIZAN Z., S.H.",
       items: items.map((li) => ({
         itemName: li.itemUnit.item.name,
         qrCode: li.itemUnit.qrCode,

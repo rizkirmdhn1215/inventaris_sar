@@ -93,6 +93,17 @@ export function DocumentEditor({
         </div>
       </div>
 
+      <div>
+        <label className="block text-xs text-zinc-400 mb-1">
+          Tanda tangan Kepala Gudang
+        </label>
+        <input
+          name="kepalaGudangName"
+          defaultValue="ALVIZAN Z., S.H."
+          className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
+        />
+      </div>
+
       <div className="rounded-xl border border-zinc-800 p-3">
         <p className="text-sm font-medium text-zinc-200 mb-2">
           Daftar barang di dokumen (drag untuk urutkan)

@@ -38,6 +38,9 @@ model Item {
   categoryId  String?  @map("category_id") @db.Uuid
   name        String
   description String?
+  merk        String?
+  type        String?
+  kodeGudang  String?  @map("kode_gudang")
   imageUrl    String?  @map("image_url")
   createdAt   DateTime @default(now()) @map("created_at")
 
