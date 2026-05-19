@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 type ModalProps = {
@@ -11,12 +12,27 @@ type ModalProps = {
   children: ReactNode;
 };
 
-/** Centered dialog with scroll — stays visible on small screens */
+/** Centered dialog — portaled above admin shell / page content */
 export function Modal({ open, onClose, title, titleIcon, children }: ModalProps) {
-  if (!open) return null;
+  const [mounted, setMounted] = useState(false);
 
-  return (
-    <div className="fixed inset-0 z-[100]">
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  if (!open || !mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999]">
       <button
         type="button"
         className="fixed inset-0 bg-black/60"
@@ -26,7 +42,7 @@ export function Modal({ open, onClose, title, titleIcon, children }: ModalProps)
       <div className="fixed inset-0 overflow-y-auto overscroll-contain">
         <div className="flex min-h-full items-center justify-center p-4 sm:p-6">
           <div
-            className="relative w-full max-w-md max-h-[min(90dvh,calc(100%-2rem))] flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900 shadow-xl"
+            className="relative w-full max-w-md max-h-[min(90dvh,calc(100%-2rem))] flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl"
             role="dialog"
             aria-modal="true"
             onClick={(e) => e.stopPropagation()}
@@ -46,6 +62,7 @@ export function Modal({ open, onClose, title, titleIcon, children }: ModalProps)
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
