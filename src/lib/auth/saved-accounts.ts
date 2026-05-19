@@ -32,6 +32,11 @@ export function removeSavedAccount(adminId: string) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
 }
 
+export function clearSavedAccounts() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(STORAGE_KEY);
+}
+
 export function updateSavedAccountProfile(
   adminId: string,
   patch: Partial<Pick<SavedAccount, 'name' | 'imageUrl' | 'email' | 'role'>>

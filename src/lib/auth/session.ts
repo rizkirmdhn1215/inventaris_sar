@@ -81,5 +81,12 @@ export async function verifySession() {
 
 export async function deleteSession() {
   const cookieStore = await cookies();
-  cookieStore.delete('session');
+  cookieStore.set('session', '', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 0,
+    expires: new Date(0),
+  });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -17,6 +17,7 @@ import { EditAccountModal } from "./edit-account-modal";
 import { AddAdminModal } from "./add-admin-modal";
 import { logoutAction } from "./actions";
 import {
+  clearSavedAccounts,
   getSavedAccounts,
   upsertSavedAccount,
   type SavedAccount,
@@ -40,6 +41,7 @@ export function AccountMenu({
   adminRole,
 }: AccountMenuProps) {
   const router = useRouter();
+  const [isLoggingOut, startLogout] = useTransition();
   const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -119,6 +121,16 @@ export function AccountMenu({
   }
 
   const otherAccounts = savedAccounts.filter((a) => a.adminId !== adminId);
+
+  function handleLogout() {
+    setOpen(false);
+    startLogout(async () => {
+      clearSavedAccounts();
+      await logoutAction();
+      router.push("/login");
+      router.refresh();
+    });
+  }
 
   return (
     <>
@@ -238,15 +250,19 @@ export function AccountMenu({
             ) : null}
 
             <div className="border-t border-zinc-800 py-1">
-              <form action={logoutAction}>
-                <button
-                  type="submit"
-                  className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-400 hover:bg-zinc-800/60"
-                >
+              <button
+                type="button"
+                disabled={isLoggingOut}
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-400 hover:bg-zinc-800/60 disabled:opacity-50"
+              >
+                {isLoggingOut ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
                   <LogOut className="w-4 h-4" />
-                  Keluar
-                </button>
-              </form>
+                )}
+                Keluar
+              </button>
             </div>
           </div>
         ) : null}

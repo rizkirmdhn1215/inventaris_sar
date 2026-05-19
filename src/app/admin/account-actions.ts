@@ -1,6 +1,6 @@
 "use server";
 
-import { hash } from "bcryptjs";
+import { compare, hash } from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import {
@@ -35,13 +35,45 @@ export async function updateProfileAction(
 ): Promise<AccountActionState> {
   try {
     const { session, admin } = await requireAdmin();
+    const passwordRow = await db.admin.findUnique({
+      where: { id: admin.id },
+      select: { password: true },
+    });
+    if (!passwordRow) {
+      return { error: "Gagal memverifikasi akun." };
+    }
     const name = String(formData.get("name") ?? "").trim();
     const nip = String(formData.get("nip") ?? "").trim() || null;
     const removeImage = formData.get("removeImage") === "true";
     const imageFile = formData.get("image");
+    const currentPassword = String(formData.get("currentPassword") ?? "");
+    const newPassword = String(formData.get("newPassword") ?? "").trim();
+    const confirmPassword = String(formData.get("confirmPassword") ?? "").trim();
 
     if (!name) {
       return { error: "Nama wajib diisi." };
+    }
+
+    const wantsPasswordChange =
+      currentPassword.length > 0 || newPassword.length > 0 || confirmPassword.length > 0;
+
+    if (wantsPasswordChange) {
+      if (!currentPassword) {
+        return { error: "Masukkan password saat ini untuk mengganti password." };
+      }
+      if (!newPassword) {
+        return { error: "Masukkan password baru." };
+      }
+      if (newPassword.length < 8) {
+        return { error: "Password baru minimal 8 karakter." };
+      }
+      if (newPassword !== confirmPassword) {
+        return { error: "Konfirmasi password tidak cocok." };
+      }
+      const valid = await compare(currentPassword, passwordRow.password);
+      if (!valid) {
+        return { error: "Password saat ini salah." };
+      }
     }
 
     let imageUrl = admin.imageUrl;
@@ -74,7 +106,14 @@ export async function updateProfileAction(
 
     const updated = await db.admin.update({
       where: { id: admin.id },
-      data: { name, nip, imageUrl },
+      data: {
+        name,
+        nip,
+        imageUrl,
+        ...(wantsPasswordChange
+          ? { password: await hash(newPassword, 12) }
+          : {}),
+      },
       select: { id: true, email: true, name: true, nip: true, imageUrl: true, role: true },
     });
 
