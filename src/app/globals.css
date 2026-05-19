@@ -24,3 +24,14 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Top layer for portaled dialogs (above admin shell & page content) */
+#modal-root {
+  position: relative;
+  z-index: 2147483647;
+  isolation: isolate;
+}
+
+#modal-root:empty {
+  display: contents;
+}

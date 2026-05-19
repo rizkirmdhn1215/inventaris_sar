@@ -89,7 +89,7 @@ export function AdminShell({
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-50 flex flex-col">
+    <div className="min-h-screen bg-zinc-950 text-zinc-50 flex flex-col relative z-0">
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur flex items-center justify-between px-4 sm:px-6 h-14 sticky top-0 z-30">
         <AppBrand
           size="sm"
@@ -156,7 +156,7 @@ export function AdminShell({
           </nav>
         </aside>
 
-        <main className="flex-1 flex flex-col min-w-0">
+        <main className="flex-1 flex flex-col min-w-0 relative z-0">
           <div className="flex-1 px-4 sm:px-6 py-4 sm:py-6 pb-20 md:pb-6">
             {children}
           </div>
