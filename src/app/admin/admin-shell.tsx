@@ -9,12 +9,12 @@ import {
   QrCode,
   ClipboardList,
   Undo2,
-  LogOut,
   Tags,
   Bell,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { logoutAction } from "./actions";
+import { AccountMenu } from "./account-menu";
+import { AppBrand } from "@/components/app-logo";
 
 const navItems = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -27,18 +27,27 @@ const navItems = [
 
 export function AdminShell({
   children,
+  adminId,
   adminName,
   adminEmail,
+  adminImageUrl,
+  adminNip,
+  adminRole,
   vapidPublicKey,
 }: {
   children: ReactNode;
+  adminId: string;
   adminName: string;
   adminEmail: string;
+  adminImageUrl: string | null;
+  adminNip: string | null;
+  adminRole: string;
   vapidPublicKey: string;
 }) {
   const pathname = usePathname();
-  const initial = (adminName?.[0] ?? "A").toUpperCase();
-  const [pushState, setPushState] = useState<"idle" | "subscribed" | "denied" | "unsupported" | "loading">("idle");
+  const [pushState, setPushState] = useState<
+    "idle" | "subscribed" | "denied" | "unsupported" | "loading"
+  >("idle");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -82,18 +91,16 @@ export function AdminShell({
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50 flex flex-col">
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur flex items-center justify-between px-4 sm:px-6 h-14 sticky top-0 z-30">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-orange-600 flex items-center justify-center text-xs font-bold">
-            SAR
-          </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold">SAR Inventory</span>
-            <span className="text-xs text-zinc-400">Panel Admin</span>
-          </div>
-        </div>
+        <AppBrand
+          size="sm"
+          href="/admin/dashboard"
+          subtitle="Panel Admin · Inventaris"
+        />
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {pushState !== "subscribed" && pushState !== "unsupported" && vapidPublicKey ? (
+          {pushState !== "subscribed" &&
+          pushState !== "unsupported" &&
+          vapidPublicKey ? (
             <button
               onClick={subscribePush}
               disabled={pushState === "loading"}
@@ -102,26 +109,26 @@ export function AdminShell({
             >
               <Bell className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">
-                {pushState === "loading" ? "..." : pushState === "denied" ? "Notif ditolak" : "Aktifkan Notif"}
+                {pushState === "loading"
+                  ? "..."
+                  : pushState === "denied"
+                    ? "Notif ditolak"
+                    : "Aktifkan Notif"}
               </span>
             </button>
           ) : null}
-          <div className="hidden sm:flex flex-col items-end">
+          <div className="hidden sm:flex flex-col items-end mr-1">
             <span className="text-sm font-medium">{adminName}</span>
             <span className="text-xs text-zinc-400">{adminEmail}</span>
           </div>
-          <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-semibold">
-            {initial}
-          </div>
-          <form action={logoutAction}>
-            <button
-              type="submit"
-              className="hidden sm:inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-zinc-800 hover:border-zinc-700 bg-zinc-900/60"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              Keluar
-            </button>
-          </form>
+          <AccountMenu
+            adminId={adminId}
+            adminName={adminName}
+            adminEmail={adminEmail}
+            adminImageUrl={adminImageUrl}
+            adminNip={adminNip}
+            adminRole={adminRole}
+          />
         </div>
       </header>
 

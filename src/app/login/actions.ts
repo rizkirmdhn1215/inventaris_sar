@@ -40,6 +40,7 @@ export async function loginAction(
       sub: admin.id,
       email: admin.email,
       name: admin.name,
+      role: admin.role ?? 'admin',
     });
 
   } catch (error) {

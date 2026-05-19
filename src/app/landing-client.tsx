@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  Shield,
   LogIn,
   Package,
   RotateCcw,
@@ -12,6 +11,7 @@ import {
   Building2,
 } from "lucide-react";
 import { PinjamForm } from "./pinjam/pinjam-form";
+import { AppBrand, AppLogo } from "@/components/app-logo";
 
 type UnitOption = {
   id: string;
@@ -44,20 +44,11 @@ export function LandingClient({
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <header className="sticky top-0 z-30 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <button
+          <AppBrand
+            size="md"
             onClick={() => setMode("none")}
-            className="flex items-center gap-2"
-          >
-            <div className="w-9 h-9 rounded-xl bg-orange-600 flex items-center justify-center">
-              <Shield className="w-5 h-5 text-white" />
-            </div>
-            <div className="text-left">
-              <p className="text-sm font-semibold leading-tight">SAR Inventory</p>
-              <p className="text-[11px] text-zinc-400 leading-tight">
-                Basarnas Padang
-              </p>
-            </div>
-          </button>
+            subtitle="Inventaris Barang · KPP Padang"
+          />
 
           <Link
             href="/login"
@@ -72,7 +63,8 @@ export function LandingClient({
 
       <main className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-10 space-y-4 sm:space-y-6">
         {mode === "none" ? (
-          <section className="text-center space-y-2 py-4 sm:py-8">
+          <section className="text-center space-y-3 py-4 sm:py-8">
+            <AppLogo size="lg" className="mx-auto" priority />
             <h1 className="text-2xl sm:text-4xl font-semibold text-white">
               Sistem Manajemen Peminjaman
             </h1>
@@ -162,7 +154,7 @@ export function LandingClient({
               body="Cek pengembalian dilakukan petugas gudang via panel admin."
             />
             <InfoCard
-              icon={<Shield className="w-4 h-4 text-orange-400" />}
+              icon={<AppLogo size="xs" className="opacity-90" />}
               title="Diawasi admin"
               body="Setiap permintaan diverifikasi sebelum disetujui."
             />
@@ -170,7 +162,7 @@ export function LandingClient({
         ) : null}
 
         <footer className="pt-6 border-t border-zinc-900 text-center text-xs text-zinc-500">
-          © {new Date().getFullYear()} Kantor SAR Padang — Sistem Inventaris
+          © {new Date().getFullYear()} Minang Rescue · KPP Padang — Sistem Inventaris
         </footer>
       </main>
     </div>

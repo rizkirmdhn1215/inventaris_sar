@@ -13,8 +13,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SAR Inventory — Basarnas Padang",
-  description: "Sistem Manajemen Peminjaman Barang Operasional SAR Padang",
+  title: "Minang Rescue — Inventaris Barang KPP Padang",
+  description:
+    "Sistem manajemen peminjaman barang operasional Minang Rescue — Kantor Pencarian dan Pertolongan Padang",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({
@@ -24,7 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="id"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>

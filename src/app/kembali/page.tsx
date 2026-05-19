@@ -1,22 +1,19 @@
 import Link from "next/link";
-import { Shield } from "lucide-react";
+import { AppBrand } from "@/components/app-logo";
 import { KembaliScanner } from "./scanner";
 
 export default function KembaliPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 px-4 py-6">
       <div className="max-w-md mx-auto space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center">
-              <Shield className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold">Pengembalian Barang</h1>
-              <p className="text-xs text-zinc-400">SAR Padang</p>
-            </div>
-          </div>
-          <Link href="/" className="text-xs text-zinc-400 hover:text-white">
+        <div className="flex items-center justify-between gap-2">
+          <AppBrand
+            size="md"
+            href="/"
+            title="Pengembalian Barang"
+            subtitle="Minang Rescue · KPP Padang"
+          />
+          <Link href="/" className="text-xs text-zinc-400 hover:text-white shrink-0">
             Beranda
           </Link>
         </div>

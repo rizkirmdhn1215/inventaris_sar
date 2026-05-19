@@ -18,11 +18,13 @@ export async function proxy(request: NextRequest) {
   }
 
   // Redirect authenticated admins from /login to /admin/dashboard
+  // unless adding another saved account
   if (pathname === '/login') {
+    const addAccount = request.nextUrl.searchParams.get('add_account') === '1';
     const cookie = request.cookies.get('session')?.value;
     const session = await decrypt(cookie);
 
-    if (session?.sub) {
+    if (session?.sub && !addAccount) {
       const dashboardUrl = new URL('/admin/dashboard', request.url);
       return NextResponse.redirect(dashboardUrl);
     }

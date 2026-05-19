@@ -17,11 +17,11 @@ self.addEventListener("push", (event) => {
     payload = { title: "Notifikasi", body: event.data.text() };
   }
 
-  const title = payload.title || "SAR Inventory";
+  const title = payload.title || "Minang Rescue";
   const options = {
     body: payload.body || "",
-    icon: "/icon-192.png",
-    badge: "/icon-192.png",
+    icon: "/logo.png",
+    badge: "/logo.png",
     data: { url: payload.url || "/admin/dashboard" },
     tag: "sar-inv",
     renotify: true,

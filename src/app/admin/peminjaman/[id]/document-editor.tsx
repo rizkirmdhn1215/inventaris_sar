@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { approveLoanAction } from "../actions";
+import { DEFAULT_PENGAWAS_GUDANG } from "@/lib/gudang-signatories";
 
 type ItemRow = {
   loanItemId: string;
@@ -14,12 +15,14 @@ export function DocumentEditor({
   loanId,
   borrowerName,
   adminDefaultName,
+  adminDefaultNip,
   defaultLetterNumber,
   initialItems,
 }: {
   loanId: string;
   borrowerName: string;
   adminDefaultName: string;
+  adminDefaultNip?: string | null;
   defaultLetterNumber?: string;
   initialItems: ItemRow[];
 }) {
@@ -61,9 +64,7 @@ export function DocumentEditor({
       </div>
 
       <div>
-        <label className="block text-xs text-zinc-400 mb-1">
-          Isi/ketentuan surat
-        </label>
+        <label className="block text-xs text-zinc-400 mb-1">Isi/ketentuan surat</label>
         <textarea
           name="letterBody"
           defaultValue="Barang dipinjam untuk keperluan operasional SAR dan wajib dikembalikan dalam kondisi baik."
@@ -71,40 +72,61 @@ export function DocumentEditor({
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs text-zinc-400 mb-1">
-            Tanda tangan peminjam
-          </label>
-          <input
-            name="borrowerSignerName"
-            defaultValue={borrowerName}
-            required
-            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-zinc-400 mb-1">
-            Tanda tangan admin
-          </label>
-          <input
-            name="adminSignerName"
-            defaultValue={adminDefaultName}
-            required
-            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
-          />
+      <div>
+        <label className="block text-xs text-zinc-400 mb-1">Tanda tangan peminjam</label>
+        <input
+          name="borrowerSignerName"
+          defaultValue={borrowerName}
+          required
+          className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
+        />
+      </div>
+
+      <div className="rounded-xl border border-zinc-800 p-3 space-y-3">
+        <p className="text-xs font-medium text-orange-300/90">Petugas Gudang</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">Nama</label>
+            <input
+              name="adminSignerName"
+              defaultValue={adminDefaultName}
+              required
+              className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">NIP</label>
+            <input
+              name="adminSignerNip"
+              defaultValue={adminDefaultNip ?? ""}
+              placeholder="Contoh: 199001012020121001"
+              className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono"
+            />
+          </div>
         </div>
       </div>
 
-      <div>
-        <label className="block text-xs text-zinc-400 mb-1">
-          Tanda tangan Kepala Gudang
-        </label>
-        <input
-          name="kepalaGudangName"
-          defaultValue="ALVIZAN Z., S.H."
-          className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
-        />
+      <div className="rounded-xl border border-zinc-800 p-3 space-y-3">
+        <p className="text-xs font-medium text-orange-300/90">Pengawas Gudang</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">Nama</label>
+            <input
+              name="pengawasGudangName"
+              defaultValue={DEFAULT_PENGAWAS_GUDANG.name}
+              className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">NIP</label>
+            <input
+              name="pengawasGudangNip"
+              defaultValue={DEFAULT_PENGAWAS_GUDANG.nip}
+              placeholder="NIP pengawas gudang"
+              className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="rounded-xl border border-zinc-800 p-3">
@@ -149,4 +171,3 @@ export function DocumentEditor({
     </form>
   );
 }
-

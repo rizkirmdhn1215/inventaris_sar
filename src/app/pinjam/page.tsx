@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { db } from "@/lib/db";
 import { PinjamForm } from "./pinjam-form";
+import { AppBrand } from "@/components/app-logo";
 
 type PinjamPageProps = {
   searchParams: Promise<{ success?: string; error?: string }>;
@@ -22,6 +24,19 @@ export default async function PinjamPage({ searchParams }: PinjamPageProps) {
 
   return (
     <div className="min-h-screen bg-zinc-950 px-4 py-6">
+      <div className="max-w-lg mx-auto space-y-4 mb-4">
+        <div className="flex items-center justify-between gap-2">
+          <AppBrand
+            size="md"
+            href="/"
+            title="Peminjaman Barang"
+            subtitle="Minang Rescue · KPP Padang"
+          />
+          <Link href="/" className="text-xs text-zinc-400 hover:text-white shrink-0">
+            Beranda
+          </Link>
+        </div>
+      </div>
       <PinjamForm
         units={units.map((unit) => ({
           id: unit.id,
@@ -36,4 +51,3 @@ export default async function PinjamPage({ searchParams }: PinjamPageProps) {
     </div>
   );
 }
-

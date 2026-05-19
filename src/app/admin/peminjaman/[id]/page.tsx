@@ -20,6 +20,13 @@ export default async function PeminjamanDetailPage({
   const query = await searchParams;
   const session = await verifySession();
 
+  const currentAdmin = session
+    ? await db.admin.findUnique({
+        where: { id: session.adminId },
+        select: { nip: true },
+      })
+    : null;
+
   const loan = await db.loan.findUnique({
     where: { id },
     include: {
@@ -156,6 +163,7 @@ export default async function PeminjamanDetailPage({
             loanId={loan.id}
             borrowerName={loan.borrowerName}
             adminDefaultName={session?.name ?? "Admin"}
+            adminDefaultNip={currentAdmin?.nip}
             defaultLetterNumber={loan.externalLetterNumber ?? undefined}
             initialItems={loan.loanItems.map((li) => ({
               loanItemId: li.id,

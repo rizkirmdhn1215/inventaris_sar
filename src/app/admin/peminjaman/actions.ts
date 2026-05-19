@@ -6,12 +6,20 @@ import { revalidatePath } from "next/cache";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { SuratPeminjamanDocument } from "@/components/pdf/surat-peminjaman";
 import { uploadBufferToMinio } from "@/lib/minio";
+import { DEFAULT_PENGAWAS_GUDANG } from "@/lib/gudang-signatories";
 
 export async function approveLoanAction(formData: FormData) {
   const loanId = String(formData.get("loanId") ?? "");
   const adminSignerName = String(formData.get("adminSignerName") ?? "").trim();
+  const adminSignerNip = String(formData.get("adminSignerNip") ?? "").trim() || null;
   const borrowerSignerName = String(formData.get("borrowerSignerName") ?? "").trim();
-  const kepalaGudangName = String(formData.get("kepalaGudangName") ?? "").trim() || "ALVIZAN Z., S.H.";
+  const pengawasGudangName =
+    String(formData.get("pengawasGudangName") ?? "").trim() ||
+    DEFAULT_PENGAWAS_GUDANG.name;
+  const pengawasGudangNip =
+    String(formData.get("pengawasGudangNip") ?? "").trim() ||
+    DEFAULT_PENGAWAS_GUDANG.nip ||
+    null;
   const letterNumber = String(formData.get("letterNumber") ?? "").trim();
   const letterBody = String(formData.get("letterBody") ?? "").trim();
   const orderedLoanItemIdsRaw = String(formData.get("orderedLoanItemIds") ?? "");
@@ -60,7 +68,9 @@ export async function approveLoanAction(formData: FormData) {
         expectedReturnDate: loan!.expectedReturnDate,
         borrowerSignerName,
         adminSignerName,
-        kepalaGudangName,
+        adminSignerNip: adminSignerNip ?? undefined,
+        pengawasGudangName,
+        pengawasGudangNip: pengawasGudangNip ?? undefined,
         items: sortedItems.map((li) => ({
           itemName: li.itemUnit.item.name,
           qrCode: li.itemUnit.qrCode,
@@ -101,7 +111,9 @@ export async function approveLoanAction(formData: FormData) {
           letterBody,
           borrowerSignerName,
           adminSignerName,
-          kepalaGudangName,
+          adminSignerNip,
+          pengawasGudangName,
+          pengawasGudangNip,
           orderedLoanItemIds,
           pdfUrl: documentUrl,
         }),

@@ -5,9 +5,10 @@ import { db } from "@/lib/db";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { SuratPeminjamanDocument } from "@/components/pdf/surat-peminjaman";
 import { verifySession } from "@/lib/auth/session";
+import { DEFAULT_PENGAWAS_GUDANG } from "@/lib/gudang-signatories";
 
 async function loadKopImage(): Promise<Buffer | null> {
-  const candidates = ["kop-surat.png", "kop-surat.jpg", "kop-surat.jpeg"];
+  const candidates = ["kop-surat.png", "kop-surat.jpg", "kop-surat.jpeg", "logo.png"];
   for (const name of candidates) {
     try {
       const filePath = path.join(process.cwd(), "public", name);
@@ -50,6 +51,9 @@ export async function GET(
     letterBody?: string;
     borrowerSignerName?: string;
     adminSignerName?: string;
+    adminSignerNip?: string;
+    pengawasGudangName?: string;
+    pengawasGudangNip?: string;
     kepalaGudangName?: string;
     orderedLoanItemIds?: string[];
   } = {};
@@ -101,7 +105,13 @@ export async function GET(
         loan.approvedBy ||
         session?.name ||
         "(Belum disetujui)",
-      kepalaGudangName: meta.kepalaGudangName || "ALVIZAN Z., S.H.",
+      adminSignerNip: meta.adminSignerNip || undefined,
+      pengawasGudangName:
+        meta.pengawasGudangName ||
+        meta.kepalaGudangName ||
+        DEFAULT_PENGAWAS_GUDANG.name,
+      pengawasGudangNip:
+        meta.pengawasGudangNip || DEFAULT_PENGAWAS_GUDANG.nip || undefined,
       items: items.map((li) => ({
         itemName: li.itemUnit.item.name,
         qrCode: li.itemUnit.qrCode,

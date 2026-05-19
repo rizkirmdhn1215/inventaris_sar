@@ -50,6 +50,7 @@ const styles = StyleSheet.create({
   signRow: { flexDirection: "row", justifyContent: "space-between" },
   signBox: { width: "40%", textAlign: "center" },
   signLine: { marginTop: 50, borderTopWidth: 1, borderTopColor: "#0a0a0a", paddingTop: 4 },
+  signNip: { marginTop: 4, fontSize: 9, color: "#404040" },
   signCenterRow: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
   signCenterBox: { width: "40%", textAlign: "center" },
   watermark: {
@@ -79,6 +80,10 @@ export type SuratPeminjamanProps = {
   expectedReturnDate: Date | string;
   borrowerSignerName: string;
   adminSignerName: string;
+  adminSignerNip?: string;
+  pengawasGudangName?: string;
+  pengawasGudangNip?: string;
+  /** @deprecated use pengawasGudangName */
   kepalaGudangName?: string;
   items: { itemName: string; qrCode: string; condition: string }[];
   /**
@@ -91,6 +96,10 @@ export type SuratPeminjamanProps = {
 };
 
 export function SuratPeminjamanDocument(props: SuratPeminjamanProps) {
+  const pengawasName =
+    props.pengawasGudangName?.trim() || props.kepalaGudangName?.trim() || "";
+  const pengawasNip = props.pengawasGudangNip?.trim() || "";
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -183,15 +192,21 @@ export function SuratPeminjamanDocument(props: SuratPeminjamanProps) {
               <Text>Padang, {formatTanggalID(new Date())}</Text>
               <Text>Petugas Gudang,</Text>
               <Text style={styles.signLine}>{props.adminSignerName}</Text>
+              {props.adminSignerNip ? (
+                <Text style={styles.signNip}>NIP. {props.adminSignerNip}</Text>
+              ) : null}
             </View>
           </View>
 
-          {props.kepalaGudangName ? (
+          {pengawasName ? (
             <View style={styles.signCenterRow}>
               <View style={styles.signCenterBox}>
                 <Text>Mengetahui,</Text>
-                <Text>Kepala Gudang,</Text>
-                <Text style={styles.signLine}>{props.kepalaGudangName}</Text>
+                <Text>Pengawas Gudang,</Text>
+                <Text style={styles.signLine}>{pengawasName}</Text>
+                {pengawasNip ? (
+                  <Text style={styles.signNip}>NIP. {pengawasNip}</Text>
+                ) : null}
               </View>
             </View>
           ) : null}

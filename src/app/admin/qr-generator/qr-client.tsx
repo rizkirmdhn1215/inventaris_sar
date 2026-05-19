@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { generateQrAction } from "./actions";
 import QRCode from "qrcode";
+import { AppBrand } from "@/components/app-logo";
 
 type Category = { id: string; name: string };
 type QrRenderMap = Record<string, string>;
@@ -31,12 +32,14 @@ export function QrGeneratorClient({ categories }: { categories: Category[] }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-semibold text-white">QR Generator</h1>
-        <p className="text-sm text-zinc-400 mt-1">
-          Isi per baris: nama barang, kategori, jumlah unit.
-        </p>
-      </div>
+      <AppBrand
+        size="md"
+        title="QR Generator"
+        subtitle="Minang Rescue · KPP Padang"
+      />
+      <p className="text-sm text-zinc-400 -mt-2">
+        Isi per baris: nama barang, kategori, jumlah unit.
+      </p>
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 sm:p-6 print:hidden">
         <form action={formAction} className="space-y-4">

@@ -61,6 +61,7 @@ export const MINIO_BUCKETS = {
     process.env.MINIO_BUCKET_DOCUMENTS ||
     "loan-documents",
   photos: process.env.MINIO_BUCKET_PHOTOS || "condition-photos",
+  avatars: process.env.MINIO_BUCKET_AVATARS || "admin-avatars",
 };
 
 export const minioClient = new Client({
