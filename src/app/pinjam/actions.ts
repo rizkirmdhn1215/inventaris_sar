@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { rememberInternalBorrower } from "@/lib/internal-borrowers";
 import { redirect } from "next/navigation";
 import { sendPushToAllAdmins } from "@/lib/push";
 
@@ -21,6 +22,8 @@ export async function createLoanRequestAction(formData: FormData) {
     String(formData.get("externalLetterNumber") ?? "").trim() || null;
   const contactPerson = String(formData.get("contactPerson") ?? "").trim() || null;
   const contactVia = String(formData.get("contactVia") ?? "").trim() || null;
+  const internalBorrowerId =
+    String(formData.get("internalBorrowerId") ?? "").trim() || null;
 
   const backPath = loanType === "external" ? "/?mode=external" : "/?mode=pinjam";
 
@@ -78,6 +81,14 @@ export async function createLoanRequestAction(formData: FormData) {
       conditionAtBorrow: unit.condition,
     })),
   });
+
+  if (loanType === "internal") {
+    await rememberInternalBorrower({
+      borrowerId: internalBorrowerId,
+      name: borrowerName,
+      division: borrowerDivision,
+    });
+  }
 
   // Notify all admins (best-effort)
   try {

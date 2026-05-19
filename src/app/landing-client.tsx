@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { PinjamForm } from "./pinjam/pinjam-form";
 import { AppBrand, AppLogo } from "@/components/app-logo";
+import type { InternalBorrowerOption } from "@/components/internal-borrower-field";
 
 type UnitOption = {
   id: string;
@@ -23,6 +24,7 @@ type UnitOption = {
 
 type LandingClientProps = {
   units: UnitOption[];
+  internalBorrowers: InternalBorrowerOption[];
   successRef?: string;
   errorMessage?: string;
   initialMode?: "none" | "pinjam" | "external";
@@ -32,6 +34,7 @@ type Mode = "none" | "pinjam" | "external";
 
 export function LandingClient({
   units,
+  internalBorrowers,
   successRef,
   errorMessage,
   initialMode = "none",
@@ -124,6 +127,7 @@ export function LandingClient({
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3 sm:p-6">
             <PinjamForm
               units={units}
+              internalBorrowers={internalBorrowers}
               successRef={successRef}
               errorMessage={errorMessage}
             />

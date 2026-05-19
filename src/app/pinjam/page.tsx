@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { listInternalBorrowers } from "@/lib/internal-borrowers";
 import { PinjamForm } from "./pinjam-form";
 import { AppBrand } from "@/components/app-logo";
 
@@ -22,6 +23,8 @@ export default async function PinjamPage({ searchParams }: PinjamPageProps) {
     take: 200,
   });
 
+  const internalBorrowers = await listInternalBorrowers();
+
   return (
     <div className="min-h-screen bg-zinc-950 px-4 py-6">
       <div className="max-w-lg mx-auto space-y-4 mb-4">
@@ -38,6 +41,7 @@ export default async function PinjamPage({ searchParams }: PinjamPageProps) {
         </div>
       </div>
       <PinjamForm
+        internalBorrowers={internalBorrowers}
         units={units.map((unit) => ({
           id: unit.id,
           qrCode: unit.qrCode,

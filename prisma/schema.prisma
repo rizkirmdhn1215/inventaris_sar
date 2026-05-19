@@ -24,6 +24,21 @@ model Admin {
   @@map("admins")
 }
 
+// ─── Peminjam Internal (Tim SAR) ──────────────────────────
+model InternalBorrower {
+  id          String    @id @default(uuid()) @db.Uuid
+  nip         String?   @unique
+  name        String
+  pangkat     String?
+  jabatan     String
+  appointedAt DateTime? @map("appointed_at") @db.Date
+  usageCount  Int       @default(0) @map("usage_count")
+  lastUsedAt  DateTime? @map("last_used_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@map("internal_borrowers")
+}
+
 // ─── Kategori Barang ──────────────────────────────────────
 model ItemCategory {
   id        String   @id @default(uuid()) @db.Uuid

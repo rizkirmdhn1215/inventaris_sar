@@ -1,7 +1,16 @@
 import { PrismaClient } from '@prisma/client';
 import { hash } from 'bcryptjs';
+import { INTERNAL_BORROWERS_SEED } from './data/internal-borrowers';
 
 const prisma = new PrismaClient();
+
+function parseDdMmYyyy(value: string): Date | null {
+  const parts = value.trim().split('/');
+  if (parts.length !== 3) return null;
+  const [day, month, year] = parts.map((p) => Number(p));
+  if (!day || !month || !year) return null;
+  return new Date(year, month - 1, day);
+}
 
 async function main() {
   console.log('Seeding initial admin user...');
@@ -49,6 +58,28 @@ async function main() {
   }
   
   console.log('Categories seeded.');
+
+  console.log('Seeding internal borrowers...');
+  for (const b of INTERNAL_BORROWERS_SEED) {
+    const appointedAt = parseDdMmYyyy(b.appointedAt);
+    await prisma.internalBorrower.upsert({
+      where: { nip: b.nip },
+      update: {
+        name: b.name,
+        pangkat: b.pangkat,
+        jabatan: b.jabatan,
+        appointedAt,
+      },
+      create: {
+        nip: b.nip,
+        name: b.name,
+        pangkat: b.pangkat,
+        jabatan: b.jabatan,
+        appointedAt,
+      },
+    });
+  }
+  console.log(`Internal borrowers seeded: ${INTERNAL_BORROWERS_SEED.length}`);
 }
 
 main()

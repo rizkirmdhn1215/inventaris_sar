@@ -13,6 +13,10 @@ import {
   FileText,
 } from "lucide-react";
 import { createLoanRequestAction } from "./actions";
+import {
+  InternalBorrowerField,
+  type InternalBorrowerOption,
+} from "@/components/internal-borrower-field";
 
 type UnitOption = {
   id: string;
@@ -24,11 +28,13 @@ type UnitOption = {
 
 export function PinjamForm({
   units,
+  internalBorrowers = [],
   successRef,
   errorMessage,
   external = false,
 }: {
   units: UnitOption[];
+  internalBorrowers?: InternalBorrowerOption[];
   successRef?: string;
   errorMessage?: string;
   external?: boolean;
@@ -250,18 +256,24 @@ export function PinjamForm({
         ) : null}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-          <input
-            name="borrowerName"
-            required
-            placeholder={external ? "Nama lengkap penanggung jawab" : "Nama lengkap"}
-            className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
-          />
-          <input
-            name="borrowerDivision"
-            required
-            placeholder={external ? "Jabatan / Satuan" : "Divisi / Satuan"}
-            className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
-          />
+          {external ? (
+            <>
+              <input
+                name="borrowerName"
+                required
+                placeholder="Nama lengkap penanggung jawab"
+                className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
+              />
+              <input
+                name="borrowerDivision"
+                required
+                placeholder="Jabatan / Satuan"
+                className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
+              />
+            </>
+          ) : (
+            <InternalBorrowerField borrowers={internalBorrowers} />
+          )}
           <label className="text-xs text-zinc-400 space-y-1">
             Tanggal pinjam
             <input

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { listInternalBorrowers } from "@/lib/internal-borrowers";
 import { LandingClient } from "./landing-client";
 
 type HomeProps = {
@@ -23,8 +24,11 @@ export default async function Home({ searchParams }: HomeProps) {
   const initialMode: "none" | "pinjam" | "external" =
     params.mode === "pinjam" || params.mode === "external" ? params.mode : "none";
 
+  const internalBorrowers = await listInternalBorrowers();
+
   return (
     <LandingClient
+      internalBorrowers={internalBorrowers}
       units={units.map((unit) => ({
         id: unit.id,
         qrCode: unit.qrCode,
