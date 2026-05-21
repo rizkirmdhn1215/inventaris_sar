@@ -6,6 +6,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { SuratPeminjamanDocument } from "@/components/pdf/surat-peminjaman";
 import { verifySession } from "@/lib/auth/session";
 import { DEFAULT_PENGAWAS_GUDANG } from "@/lib/gudang-signatories";
+import { groupLoanItemsForPdf } from "@/lib/inventory";
 
 async function loadKopImage(): Promise<Buffer | null> {
   const candidates = ["kop-surat.png", "kop-surat.jpg", "kop-surat.jpeg", "logo.png"];
@@ -112,11 +113,7 @@ export async function GET(
         DEFAULT_PENGAWAS_GUDANG.name,
       pengawasGudangNip:
         meta.pengawasGudangNip || DEFAULT_PENGAWAS_GUDANG.nip || undefined,
-      items: items.map((li) => ({
-        itemName: li.itemUnit.item.name,
-        qrCode: li.itemUnit.qrCode,
-        condition: li.conditionAtBorrow,
-      })),
+      items: groupLoanItemsForPdf(items),
       kopImage,
       isDraft,
     })

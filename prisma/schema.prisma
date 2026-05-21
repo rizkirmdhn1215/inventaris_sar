@@ -74,7 +74,7 @@ model ItemUnit {
   itemId    String   @map("item_id") @db.Uuid
   qrCode    String   @unique @map("qr_code") // SAR-CHAINSAW-0001
   condition String   @default("good") // good | damaged | lost
-  status    String   @default("available") // available | borrowed
+  status    String   @default("available") // available | borrowed | maintenance
   notes     String?
   createdAt DateTime @default(now()) @map("created_at")
 

@@ -85,7 +85,12 @@ export type SuratPeminjamanProps = {
   pengawasGudangNip?: string;
   /** @deprecated use pengawasGudangName */
   kepalaGudangName?: string;
-  items: { itemName: string; qrCode: string; condition: string }[];
+  items: {
+    itemName: string;
+    quantity: number;
+    merk?: string | null;
+    condition: string;
+  }[];
   /**
    * Optional letterhead image (PNG/JPG Buffer). If provided, used as header.
    * Otherwise a text header is rendered.
@@ -157,7 +162,8 @@ export function SuratPeminjamanDocument(props: SuratPeminjamanProps) {
           <View style={styles.tr}>
             <Text style={[styles.th, { width: 40 }]}>No</Text>
             <Text style={[styles.th, { flex: 2 }]}>Nama Barang</Text>
-            <Text style={[styles.th, { flex: 2 }]}>Kode Unit</Text>
+            <Text style={[styles.th, { flex: 1 }]}>Merk</Text>
+            <Text style={[styles.th, { width: 56 }]}>Jumlah</Text>
             <Text style={[styles.th, { flex: 1, borderRightWidth: 0 }]}>Kondisi</Text>
           </View>
           {props.items.map((item, i) => {
@@ -167,7 +173,8 @@ export function SuratPeminjamanDocument(props: SuratPeminjamanProps) {
               <View key={i} style={RowView}>
                 <Text style={[styles.td, { width: 40 }]}>{i + 1}</Text>
                 <Text style={[styles.td, { flex: 2 }]}>{item.itemName}</Text>
-                <Text style={[styles.td, { flex: 2 }]}>{item.qrCode}</Text>
+                <Text style={[styles.td, { flex: 1 }]}>{item.merk ?? "-"}</Text>
+                <Text style={[styles.td, { width: 56 }]}>{item.quantity}</Text>
                 <Text style={[styles.tdLast, { flex: 1 }]}>{item.condition}</Text>
               </View>
             );

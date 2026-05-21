@@ -7,6 +7,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { SuratPeminjamanDocument } from "@/components/pdf/surat-peminjaman";
 import { uploadBufferToMinio } from "@/lib/minio";
 import { DEFAULT_PENGAWAS_GUDANG } from "@/lib/gudang-signatories";
+import { groupLoanItemsForPdf } from "@/lib/inventory";
 
 export async function approveLoanAction(formData: FormData) {
   const loanId = String(formData.get("loanId") ?? "");
@@ -71,11 +72,7 @@ export async function approveLoanAction(formData: FormData) {
         adminSignerNip: adminSignerNip ?? undefined,
         pengawasGudangName,
         pengawasGudangNip: pengawasGudangNip ?? undefined,
-        items: sortedItems.map((li) => ({
-          itemName: li.itemUnit.item.name,
-          qrCode: li.itemUnit.qrCode,
-          condition: li.conditionAtBorrow,
-        })),
+        items: groupLoanItemsForPdf(sortedItems),
       })
     );
 

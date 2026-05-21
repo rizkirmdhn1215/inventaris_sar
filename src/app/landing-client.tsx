@@ -13,17 +13,11 @@ import {
 import { PinjamForm } from "./pinjam/pinjam-form";
 import { AppBrand, AppLogo } from "@/components/app-logo";
 import type { InternalBorrowerOption } from "@/components/internal-borrower-field";
-
-type UnitOption = {
-  id: string;
-  qrCode: string;
-  condition: string;
-  itemName: string;
-  categoryName: string | null;
-};
+import type { BorrowCatalogItem, ScanUnitOption } from "@/lib/borrow-catalog";
 
 type LandingClientProps = {
-  units: UnitOption[];
+  catalog: BorrowCatalogItem[];
+  scanUnits: ScanUnitOption[];
   internalBorrowers: InternalBorrowerOption[];
   successRef?: string;
   errorMessage?: string;
@@ -33,7 +27,8 @@ type LandingClientProps = {
 type Mode = "none" | "pinjam" | "external";
 
 export function LandingClient({
-  units,
+  catalog,
+  scanUnits,
   internalBorrowers,
   successRef,
   errorMessage,
@@ -126,7 +121,8 @@ export function LandingClient({
         {mode === "pinjam" ? (
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3 sm:p-6">
             <PinjamForm
-              units={units}
+              catalog={catalog}
+              scanUnits={scanUnits}
               internalBorrowers={internalBorrowers}
               successRef={successRef}
               errorMessage={errorMessage}
@@ -138,7 +134,8 @@ export function LandingClient({
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3 sm:p-6">
             <PinjamForm
               external
-              units={units}
+              catalog={catalog}
+              scanUnits={scanUnits}
               successRef={successRef}
               errorMessage={errorMessage}
             />
@@ -149,8 +146,8 @@ export function LandingClient({
           <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4">
             <InfoCard
               icon={<Package className="w-4 h-4 text-orange-400" />}
-              title="Setiap barang unik"
-              body="Setiap unit fisik punya QR & riwayat sendiri."
+              title="Pinjam per jenis"
+              body="Cari Medkit, Tenda, dll. lalu tentukan jumlah unit — surat PDF ringkas."
             />
             <InfoCard
               icon={<RotateCcw className="w-4 h-4 text-orange-400" />}

@@ -7,6 +7,7 @@ import {
   CameraOff,
   X,
   Plus,
+  Minus,
   Search,
   AlertTriangle,
   Check,
@@ -17,29 +18,27 @@ import {
   InternalBorrowerField,
   type InternalBorrowerOption,
 } from "@/components/internal-borrower-field";
+import type { BorrowCatalogItem } from "@/lib/borrow-catalog";
+import type { ScanUnitOption } from "@/lib/borrow-catalog";
 
-type UnitOption = {
-  id: string;
-  qrCode: string;
-  condition: string;
-  itemName: string;
-  categoryName: string | null;
-};
+type SelectedLine = BorrowCatalogItem & { quantity: number };
 
 export function PinjamForm({
-  units,
+  catalog,
+  scanUnits,
   internalBorrowers = [],
   successRef,
   errorMessage,
   external = false,
 }: {
-  units: UnitOption[];
+  catalog: BorrowCatalogItem[];
+  scanUnits: ScanUnitOption[];
   internalBorrowers?: InternalBorrowerOption[];
   successRef?: string;
   errorMessage?: string;
   external?: boolean;
 }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Map<string, SelectedLine>>(new Map());
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanFeedback, setScanFeedback] = useState<{
@@ -53,24 +52,75 @@ export function PinjamForm({
   const controlsRef = useRef<IScannerControls | null>(null);
   const recentScanRef = useRef<{ code: string; at: number } | null>(null);
 
+  const catalogById = new Map(catalog.map((c) => [c.itemId, c]));
+
   useEffect(() => {
     return () => {
       controlsRef.current?.stop();
     };
   }, []);
 
-  // auto-clear feedback after 2s
   useEffect(() => {
     if (!scanFeedback) return;
     const t = setTimeout(() => setScanFeedback(null), 2500);
     return () => clearTimeout(t);
   }, [scanFeedback]);
 
+  function addOrIncrementItem(itemId: string, delta = 1) {
+    const item = catalogById.get(itemId);
+    if (!item) {
+      setScanFeedback({
+        type: "warn",
+        msg: "Barang tidak tersedia untuk dipinjam (maintenance atau habis).",
+      });
+      return false;
+    }
+
+    const current = selected.get(itemId)?.quantity ?? 0;
+    if (current + delta > item.availableCount) {
+      setScanFeedback({
+        type: "warn",
+        msg: `Stok ${item.name} hanya ${item.availableCount} unit tersedia.`,
+      });
+      return false;
+    }
+
+    setSelected((prev) => {
+      const next = new Map(prev);
+      next.set(itemId, { ...item, quantity: current + delta });
+      return next;
+    });
+    setScanFeedback({
+      type: "ok",
+      msg: `${item.name} × ${current + delta}`,
+    });
+    return true;
+  }
+
+  function setQuantity(itemId: string, quantity: number) {
+    const item = catalogById.get(itemId);
+    if (!item) return;
+    const q = Math.max(0, Math.min(quantity, item.availableCount));
+    setSelected((prev) => {
+      const next = new Map(prev);
+      if (q === 0) next.delete(itemId);
+      else next.set(itemId, { ...item, quantity: q });
+      return next;
+    });
+  }
+
+  function removeLine(itemId: string) {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      next.delete(itemId);
+      return next;
+    });
+  }
+
   function addByQrCode(code: string) {
     const trimmed = code.trim();
     if (!trimmed) return;
 
-    // debounce same-code scans within 1.5s (camera fires continuously)
     const now = Date.now();
     if (
       recentScanRef.current &&
@@ -81,34 +131,15 @@ export function PinjamForm({
     }
     recentScanRef.current = { code: trimmed, at: now };
 
-    const unit = units.find((u) => u.qrCode === trimmed);
+    const unit = scanUnits.find((u) => u.qrCode === trimmed);
     if (!unit) {
       setScanFeedback({
         type: "warn",
-        msg: `${trimmed} tidak ditemukan di daftar tersedia.`,
+        msg: `${trimmed} tidak ditemukan atau tidak tersedia.`,
       });
       return;
     }
-    if (selected.has(unit.id)) {
-      setScanFeedback({
-        type: "warn",
-        msg: `${unit.itemName} (${unit.qrCode}) sudah dipilih.`,
-      });
-      return;
-    }
-    setSelected((prev) => new Set(prev).add(unit.id));
-    setScanFeedback({
-      type: "ok",
-      msg: `Ditambahkan: ${unit.itemName} (${unit.qrCode})`,
-    });
-  }
-
-  function removeSelected(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
+    addOrIncrementItem(unit.itemId, 1);
   }
 
   async function startScan() {
@@ -116,7 +147,6 @@ export function PinjamForm({
     setScanning(true);
     try {
       const reader = new BrowserMultiFormatReader();
-      // Prefer rear camera on phones; fall back to any available device.
       const controls = await reader.decodeFromConstraints(
         {
           video: {
@@ -147,35 +177,19 @@ export function PinjamForm({
     setScanning(false);
   }
 
-  function addUnit(unit: UnitOption) {
-    if (selected.has(unit.id)) {
-      setScanFeedback({
-        type: "warn",
-        msg: `${unit.itemName} (${unit.qrCode}) sudah dipilih.`,
-      });
-      return;
-    }
-    setSelected((prev) => new Set(prev).add(unit.id));
-    setScanFeedback({
-      type: "ok",
-      msg: `Ditambahkan: ${unit.itemName} (${unit.qrCode})`,
-    });
-    setManualQuery("");
-    setManualOpen(false);
-  }
+  const selectedLines = [...selected.values()];
+  const totalUnits = selectedLines.reduce((s, l) => s + l.quantity, 0);
 
-  const selectedUnits = units.filter((u) => selected.has(u.id));
-  const availableUnits = units.filter((u) => !selected.has(u.id));
-  const matchingUnits = (() => {
+  const matchingItems = (() => {
     const q = manualQuery.trim().toLowerCase();
     const list = q
-      ? availableUnits.filter(
-          (u) =>
-            u.itemName.toLowerCase().includes(q) ||
-            u.qrCode.toLowerCase().includes(q) ||
-            (u.categoryName ?? "").toLowerCase().includes(q)
+      ? catalog.filter(
+          (item) =>
+            item.name.toLowerCase().includes(q) ||
+            (item.merk ?? "").toLowerCase().includes(q) ||
+            (item.categoryName ?? "").toLowerCase().includes(q)
         )
-      : availableUnits;
+      : catalog;
     return list.slice(0, 30);
   })();
 
@@ -187,8 +201,8 @@ export function PinjamForm({
         </h1>
         <p className="text-xs sm:text-sm text-zinc-400 mt-0.5">
           {external
-            ? "Untuk peminjam dari instansi lain (di luar Tim SAR Padang). Lengkapi data instansi & nomor surat resmi."
-            : "Isi data peminjam, lalu scan QR setiap barang yang ingin dipinjam."}
+            ? "Untuk peminjam dari instansi lain. Cari jenis barang (mis. Medkit) lalu tentukan jumlah unit."
+            : "Cari jenis barang lalu isi jumlah unit. Scan QR opsional (+1 unit per scan)."}
         </p>
       </div>
 
@@ -199,8 +213,7 @@ export function PinjamForm({
             <strong className="font-mono">{successRef}</strong>
           </p>
           <p className="text-xs text-emerald-200/80">
-            Berikut draft surat peminjaman. Setelah disetujui admin, surat resmi
-            (tanpa watermark DRAFT) akan diberikan.
+            Draft surat menampilkan barang per jenis (bukan per stiker QR).
           </p>
           <a
             href={`/api/loans/${successRef}/pdf?draft=1`}
@@ -249,9 +262,6 @@ export function PinjamForm({
               placeholder="Kontak via (HP/WA/Email)"
               className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
             />
-            <p className="sm:col-span-2 text-[11px] text-orange-200/80">
-              Nomor surat di atas akan digunakan sebagai nomor pada surat peminjaman PDF.
-            </p>
           </div>
         ) : null}
 
@@ -301,131 +311,77 @@ export function PinjamForm({
           className="w-full min-h-24 rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
         />
 
-        {/* Scanner panel */}
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60">
-          <div className="overflow-hidden rounded-t-2xl">
-            <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-white">Scan QR Barang</p>
-                <p className="text-xs text-zinc-400">
-                  Scan setiap unit yang ingin dipinjam, atau ketik nama barang.
-                </p>
-              </div>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-200">
-                {selected.size} dipilih
-              </span>
+          <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-white">Cari & Pilih Barang</p>
+              <p className="text-xs text-zinc-400">
+                Satu baris per jenis (Medkit, Tenda, dll.) — tentukan jumlah unit.
+              </p>
             </div>
-
-            <div className="bg-black aspect-square sm:aspect-video relative">
-            <video
-              ref={videoRef}
-              className="w-full h-full object-cover"
-              playsInline
-              autoPlay
-              muted
-            />
-            {!scanning ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 text-center px-4">
-                <Camera className="w-8 h-8 text-orange-400" />
-                <p className="text-xs text-zinc-200">
-                  Tekan tombol untuk mulai scan
-                </p>
-              </div>
-            ) : (
-              <div className="absolute inset-x-12 top-1/2 -translate-y-1/2 h-24 sm:h-32 border-2 border-orange-500/70 rounded-xl pointer-events-none" />
-            )}
-            </div>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-200">
+              {totalUnits} unit
+            </span>
           </div>
 
-          <div className="p-3 space-y-2">
-            <div className="flex gap-2">
-              {!scanning ? (
-                <button
-                  type="button"
-                  onClick={startScan}
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-orange-600 hover:bg-orange-500 px-4 py-2.5 text-sm font-medium text-white"
-                >
-                  <Camera className="w-4 h-4" /> Mulai Scan
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={stopScan}
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 hover:border-zinc-600 px-4 py-2.5 text-sm font-medium text-zinc-100"
-                >
-                  <CameraOff className="w-4 h-4" /> Berhenti
-                </button>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <p className="text-xs text-zinc-400">
-                Atau ketik / pilih barang manual:
-              </p>
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-zinc-500" />
-                <input
-                  value={manualQuery}
-                  onChange={(e) => {
-                    setManualQuery(e.target.value);
-                    setManualOpen(true);
-                  }}
-                  onFocus={() => setManualOpen(true)}
-                  onBlur={() =>
-                    // delay so click on list item still fires
-                    setTimeout(() => setManualOpen(false), 150)
+          <div className="p-3 space-y-3">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-zinc-500" />
+              <input
+                value={manualQuery}
+                onChange={(e) => {
+                  setManualQuery(e.target.value);
+                  setManualOpen(true);
+                }}
+                onFocus={() => setManualOpen(true)}
+                onBlur={() => setTimeout(() => setManualOpen(false), 150)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && matchingItems.length > 0) {
+                    e.preventDefault();
+                    addOrIncrementItem(matchingItems[0].itemId, 1);
+                    setManualQuery("");
+                    setManualOpen(false);
                   }
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && matchingUnits.length > 0) {
-                      e.preventDefault();
-                      addUnit(matchingUnits[0]);
-                    } else if (e.key === "Escape") {
-                      setManualOpen(false);
-                    }
-                  }}
-                  placeholder="Cari nama barang, kode QR, atau kategori..."
-                  className="w-full rounded-lg bg-zinc-950 border border-zinc-800 pl-8 pr-3 py-2 text-sm text-white"
-                />
+                }}
+                placeholder="Cari nama, merk, atau kategori..."
+                className="w-full rounded-lg bg-zinc-950 border border-zinc-800 pl-8 pr-3 py-2 text-sm text-white"
+              />
 
-                {manualOpen ? (
-                  <div className="absolute z-50 mt-1 left-0 right-0 max-h-72 overflow-auto rounded-lg border border-zinc-700 bg-zinc-950 shadow-2xl">
-                    {matchingUnits.length === 0 ? (
-                      <p className="px-3 py-3 text-xs text-zinc-500 text-center">
-                        {availableUnits.length === 0
-                          ? "Semua barang sudah dipilih."
-                          : "Tidak ada hasil."}
-                      </p>
-                    ) : (
-                      <ul className="py-1">
-                        {matchingUnits.map((unit) => (
-                          <li key={unit.id}>
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => addUnit(unit)}
-                              className="w-full text-left px-3 py-2 hover:bg-zinc-800 flex items-center gap-2"
-                            >
-                              <Plus className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm text-zinc-100 truncate">
-                                  {unit.itemName}
-                                </p>
-                                <p className="text-[11px] text-zinc-500 font-mono truncate">
-                                  {unit.qrCode} · {unit.categoryName ?? "-"} ·{" "}
-                                  {unit.condition}
-                                </p>
-                              </div>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-              <p className="text-[10px] text-zinc-500">
-                Tekan Enter untuk pilih hasil teratas.
-              </p>
+              {manualOpen ? (
+                <div className="absolute z-50 mt-1 left-0 right-0 max-h-72 overflow-auto rounded-lg border border-zinc-700 bg-zinc-950 shadow-2xl">
+                  {matchingItems.length === 0 ? (
+                    <p className="px-3 py-3 text-xs text-zinc-500 text-center">
+                      Tidak ada barang tersedia.
+                    </p>
+                  ) : (
+                    <ul className="py-1">
+                      {matchingItems.map((item) => (
+                        <li key={item.itemId}>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              addOrIncrementItem(item.itemId, 1);
+                              setManualQuery("");
+                              setManualOpen(false);
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-zinc-800 flex items-center gap-2"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm text-zinc-100 truncate">{item.name}</p>
+                              <p className="text-[11px] text-zinc-500">
+                                {item.merk ?? "-"} · {item.categoryName ?? "-"} · stok{" "}
+                                {item.availableCount}
+                              </p>
+                            </div>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
             </div>
 
             {scanFeedback ? (
@@ -444,52 +400,114 @@ export function PinjamForm({
                 {scanFeedback.msg}
               </p>
             ) : null}
-
-            {scanError ? (
-              <p className="text-xs text-red-300 bg-red-950/40 border border-red-900/40 rounded-lg px-3 py-2">
-                {scanError}
-              </p>
-            ) : null}
           </div>
         </div>
 
-        {/* Selected items list */}
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden">
+          <div className="overflow-hidden rounded-t-2xl">
+            <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+              <p className="text-sm font-medium text-white">Scan QR (opsional)</p>
+              <span className="text-[10px] text-zinc-500">+1 unit per scan</span>
+            </div>
+            <div className="bg-black aspect-square sm:aspect-video relative">
+              <video
+                ref={videoRef}
+                className="w-full h-full object-cover"
+                playsInline
+                autoPlay
+                muted
+              />
+              {!scanning ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60">
+                  <Camera className="w-8 h-8 text-orange-400" />
+                  <p className="text-xs text-zinc-200">Mulai scan untuk menambah unit</p>
+                </div>
+              ) : (
+                <div className="absolute inset-x-12 top-1/2 -translate-y-1/2 h-24 border-2 border-orange-500/70 rounded-xl pointer-events-none" />
+              )}
+            </div>
+          </div>
+          <div className="p-3 flex gap-2">
+            {!scanning ? (
+              <button
+                type="button"
+                onClick={startScan}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 px-4 py-2 text-sm text-white"
+              >
+                <Camera className="w-4 h-4" /> Mulai Scan
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={stopScan}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-100"
+              >
+                <CameraOff className="w-4 h-4" /> Berhenti
+              </button>
+            )}
+          </div>
+          {scanError ? (
+            <p className="px-3 pb-3 text-xs text-red-300">{scanError}</p>
+          ) : null}
+        </div>
+
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden">
           <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
             <p className="text-sm font-medium text-white">Barang yang Dipinjam</p>
-            <span className="text-xs text-zinc-400">
-              {selected.size} barang
-            </span>
+            <span className="text-xs text-zinc-400">{selectedLines.length} jenis</span>
           </div>
-          {selectedUnits.length === 0 ? (
+          {selectedLines.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-zinc-500">
-              Belum ada barang. Scan QR atau ketik kode di atas.
+              Belum ada barang. Cari nama barang di atas.
             </p>
           ) : (
             <ul className="divide-y divide-zinc-800">
-              {selectedUnits.map((unit) => (
+              {selectedLines.map((line) => (
                 <li
-                  key={unit.id}
-                  className="px-4 py-2 flex items-center justify-between gap-2"
+                  key={line.itemId}
+                  className="px-4 py-3 flex items-center justify-between gap-3"
                 >
-                  <div className="min-w-0">
-                    <p className="text-sm text-zinc-100 truncate">
-                      {unit.itemName}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-zinc-100">{line.name}</p>
+                    <p className="text-xs text-zinc-500">
+                      {line.merk ?? "-"} · max {line.availableCount}
                     </p>
-                    <p className="text-xs text-zinc-400 font-mono truncate">
-                      {unit.qrCode} · {unit.categoryName ?? "-"} · {unit.condition}
-                    </p>
+                    <input type="hidden" name="borrowItemId" value={line.itemId} />
+                    <input type="hidden" name="borrowQuantity" value={line.quantity} />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeSelected(unit.id)}
-                    className="text-red-300 hover:text-red-200 p-1.5"
-                    title="Hapus"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                  {/* hidden form input so server action receives the id */}
-                  <input type="hidden" name="itemUnitId" value={unit.id} />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setQuantity(line.itemId, line.quantity - 1)}
+                      className="p-1.5 rounded-lg border border-zinc-700 text-zinc-300"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <input
+                      type="number"
+                      min={1}
+                      max={line.availableCount}
+                      value={line.quantity}
+                      onChange={(e) =>
+                        setQuantity(line.itemId, Number(e.target.value) || 1)
+                      }
+                      className="w-12 text-center rounded-lg bg-zinc-950 border border-zinc-700 text-sm text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => addOrIncrementItem(line.itemId, 1)}
+                      className="p-1.5 rounded-lg border border-zinc-700 text-zinc-300"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeLine(line.itemId)}
+                      className="p-1.5 text-red-300"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -498,10 +516,10 @@ export function PinjamForm({
 
         <button
           type="submit"
-          disabled={selected.size === 0}
+          disabled={totalUnits === 0}
           className="rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white"
         >
-          Kirim Request Peminjaman ({selected.size})
+          Kirim Request ({totalUnits} unit)
         </button>
       </form>
     </div>

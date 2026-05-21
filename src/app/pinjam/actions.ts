@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { rememberInternalBorrower } from "@/lib/internal-borrowers";
 import { redirect } from "next/navigation";
 import { sendPushToAllAdmins } from "@/lib/push";
+import { allocateAvailableUnits } from "@/lib/inventory";
 
 export async function createLoanRequestAction(formData: FormData) {
   const borrowerName = String(formData.get("borrowerName") ?? "").trim();
@@ -11,7 +12,6 @@ export async function createLoanRequestAction(formData: FormData) {
   const purpose = String(formData.get("purpose") ?? "").trim();
   const borrowDate = String(formData.get("borrowDate") ?? "").trim();
   const expectedReturnDate = String(formData.get("expectedReturnDate") ?? "").trim();
-  const itemUnitIds = formData.getAll("itemUnitId").map((v) => String(v));
 
   const loanType =
     String(formData.get("loanType") ?? "internal").trim() === "external"
@@ -24,6 +24,9 @@ export async function createLoanRequestAction(formData: FormData) {
   const contactVia = String(formData.get("contactVia") ?? "").trim() || null;
   const internalBorrowerId =
     String(formData.get("internalBorrowerId") ?? "").trim() || null;
+
+  const borrowItemIds = formData.getAll("borrowItemId").map((v) => String(v));
+  const borrowQuantities = formData.getAll("borrowQuantity").map((v) => Number(String(v)));
 
   const backPath = loanType === "external" ? "/?mode=external" : "/?mode=pinjam";
 
@@ -45,17 +48,39 @@ export async function createLoanRequestAction(formData: FormData) {
     }
   }
 
-  if (itemUnitIds.length === 0) {
+  const lines = borrowItemIds
+    .map((itemId, i) => ({
+      itemId,
+      quantity: borrowQuantities[i],
+    }))
+    .filter((l) => l.itemId && Number.isInteger(l.quantity) && l.quantity > 0);
+
+  if (lines.length === 0) {
     redirect(`${backPath}&error=Pilih%20minimal%201%20barang`);
   }
 
-  const units = await db.itemUnit.findMany({
-    where: { id: { in: itemUnitIds }, status: "available" },
-    select: { id: true, condition: true },
-  });
+  const usedUnitIds: string[] = [];
+  const unitsToLoan: { id: string; condition: string }[] = [];
 
-  if (units.length !== itemUnitIds.length) {
-    redirect(`${backPath}&error=Sebagian%20barang%20sudah%20tidak%20tersedia`);
+  for (const line of lines) {
+    const allocated = await allocateAvailableUnits(
+      line.itemId,
+      line.quantity,
+      usedUnitIds
+    );
+    if (!allocated) {
+      const item = await db.item.findUnique({
+        where: { id: line.itemId },
+        select: { name: true },
+      });
+      redirect(
+        `${backPath}&error=Stok%20${encodeURIComponent(item?.name ?? "barang")}%20tidak%20cukup%20(${line.quantity}%20diminta)`
+      );
+    }
+    for (const u of allocated) {
+      usedUnitIds.push(u.id);
+      unitsToLoan.push(u);
+    }
   }
 
   const loan = await db.loan.create({
@@ -75,7 +100,7 @@ export async function createLoanRequestAction(formData: FormData) {
   });
 
   await db.loanItem.createMany({
-    data: units.map((unit) => ({
+    data: unitsToLoan.map((unit) => ({
       loanId: loan.id,
       itemUnitId: unit.id,
       conditionAtBorrow: unit.condition,
@@ -90,11 +115,11 @@ export async function createLoanRequestAction(formData: FormData) {
     });
   }
 
-  // Notify all admins (best-effort)
+  const totalUnits = unitsToLoan.length;
   try {
     await sendPushToAllAdmins({
       title: "Request peminjaman baru",
-      body: `${borrowerName} (${borrowerDivision}) mengajukan ${units.length} barang.`,
+      body: `${borrowerName} (${borrowerDivision}) mengajukan ${totalUnits} unit barang.`,
       url: `/admin/peminjaman/${loan.id}`,
     });
   } catch (err) {
@@ -103,4 +128,3 @@ export async function createLoanRequestAction(formData: FormData) {
 
   redirect(`/?success=${loan.id}`);
 }
-

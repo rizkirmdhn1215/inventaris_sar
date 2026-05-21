@@ -1,28 +1,20 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { Package, Warehouse, ArrowRightLeft, Plus, AlertTriangle } from "lucide-react";
+import { Package, Warehouse, ArrowRightLeft, Plus, AlertTriangle, Wrench } from "lucide-react";
 import { upsertItemAction } from "./actions";
 import { STATUS_COLOR } from "@/lib/format";
 import { QrViewerButton } from "./qr-viewer";
 import { EditableItemRow } from "./editable-row";
 
 type BarangPageProps = {
-  searchParams: Promise<{ status?: string; tab?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    tab?: string;
+    q?: string;
+    merk?: string;
+    category?: string;
+  }>;
 };
-
-function getQrImagePath(notes: string | null, qrCode: string) {
-  try {
-    const parsed = notes ? (JSON.parse(notes) as { qrImagePath?: string }) : null;
-    if (parsed?.qrImagePath) return parsed.qrImagePath;
-  } catch {}
-  const endpoint = process.env.MINIO_ENDPOINT;
-  const port = process.env.MINIO_PORT || "9000";
-  const useSSL = process.env.MINIO_USE_SSL === "true";
-  const bucket = process.env.MINIO_BUCKET_QRS || "item-qrs";
-  if (!endpoint) return null;
-  const filename = `${qrCode.replace(/[^A-Z0-9-]/gi, "_")}.png`;
-  return `${useSSL ? "https" : "http"}://${endpoint}:${port}/${bucket}/qr/${filename}`;
-}
 
 export default async function BarangPage({ searchParams }: BarangPageProps) {
   const params = await searchParams;
@@ -32,17 +24,48 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
       ? "borrowed"
       : params.status === "damaged"
         ? "damaged"
-        : "available";
+        : params.status === "maintenance"
+          ? "maintenance"
+          : "available";
+
+  const searchQ = (params.q ?? "").trim();
+  const searchMerk = (params.merk ?? "").trim();
+  const searchCategory = (params.category ?? "").trim();
 
   const unitsWhere =
     activeStatus === "damaged"
       ? { condition: { in: ["damaged", "lost"] } }
       : { status: activeStatus };
 
-  const [availableCount, borrowedCount, damagedCount, units, items, categories] = await Promise.all([
+  const masterWhere = {
+    ...(searchQ
+      ? {
+          OR: [
+            { name: { contains: searchQ, mode: "insensitive" as const } },
+            { description: { contains: searchQ, mode: "insensitive" as const } },
+            { kodeGudang: { contains: searchQ, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+    ...(searchMerk
+      ? { merk: { contains: searchMerk, mode: "insensitive" as const } }
+      : {}),
+    ...(searchCategory ? { categoryId: searchCategory } : {}),
+  };
+
+  const [
+    availableCount,
+    borrowedCount,
+    damagedCount,
+    maintenanceCount,
+    units,
+    items,
+    categories,
+  ] = await Promise.all([
     db.itemUnit.count({ where: { status: "available" } }),
     db.itemUnit.count({ where: { status: "borrowed" } }),
     db.itemUnit.count({ where: { condition: { in: ["damaged", "lost"] } } }),
+    db.itemUnit.count({ where: { status: "maintenance" } }),
     db.itemUnit.findMany({
       where: unitsWhere,
       include: { item: { include: { category: true } } },
@@ -50,21 +73,30 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
       take: 100,
     }),
     db.item.findMany({
+      where: masterWhere,
       include: {
         category: true,
-        _count: { select: { units: true } },
+        units: { select: { id: true, status: true } },
       },
       orderBy: { name: "asc" },
     }),
     db.itemCategory.findMany({ orderBy: { name: "asc" } }),
   ]);
 
+  const masterFilterQs = (extra: Record<string, string>) => {
+    const q = new URLSearchParams({ tab: "master", ...extra });
+    if (searchQ) q.set("q", searchQ);
+    if (searchMerk) q.set("merk", searchMerk);
+    if (searchCategory) q.set("category", searchCategory);
+    return q.toString();
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl sm:text-2xl font-semibold text-white">Manajemen Barang</h1>
         <p className="text-sm text-zinc-400 mt-1">
-          Master barang (jenis) & unit fisik (per QR).
+          Master barang (jenis) & unit fisik (per QR). Atur jumlah unit & maintenance per jenis.
         </p>
       </div>
 
@@ -78,7 +110,7 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
           Unit Fisik
         </Link>
         <Link
-          href="/admin/barang?tab=master"
+          href={`/admin/barang?${masterFilterQs({})}`}
           className={`px-4 py-2 text-sm border-b-2 ${
             tab === "master" ? "border-orange-500 text-white" : "border-transparent text-zinc-400"
           }`}
@@ -89,6 +121,51 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
 
       {tab === "master" ? (
         <div className="space-y-4">
+          <form
+            method="get"
+            className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 grid grid-cols-1 md:grid-cols-4 gap-2"
+          >
+            <input type="hidden" name="tab" value="master" />
+            <input
+              name="q"
+              defaultValue={searchQ}
+              placeholder="Cari nama / deskripsi / kode gudang"
+              className="rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
+            />
+            <input
+              name="merk"
+              defaultValue={searchMerk}
+              placeholder="Filter merk"
+              className="rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
+            />
+            <select
+              name="category"
+              defaultValue={searchCategory}
+              className="rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
+            >
+              <option value="">Semua kategori</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="rounded-lg bg-orange-600 hover:bg-orange-500 px-4 py-2 text-sm text-white"
+              >
+                Cari
+              </button>
+              <Link
+                href="/admin/barang?tab=master"
+                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200"
+              >
+                Reset
+              </Link>
+            </div>
+          </form>
+
           <form
             action={upsertItemAction}
             className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 grid grid-cols-1 md:grid-cols-12 gap-2"
@@ -150,32 +227,43 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
                     <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Type</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Kode Gudang</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Deskripsi</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Unit</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Total Unit</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Tersedia</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Maintenance</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => (
-                    <EditableItemRow
-                      key={item.id}
-                      item={{
-                        id: item.id,
-                        name: item.name,
-                        description: item.description,
-                        merk: item.merk,
-                        type: item.type,
-                        kodeGudang: item.kodeGudang,
-                        categoryId: item.categoryId,
-                        category: item.category ? { name: item.category.name } : null,
-                        unitCount: item._count.units,
-                      }}
-                      categories={categories.map((c) => ({ id: c.id, name: c.name }))}
-                    />
-                  ))}
+                  {items.map((item) => {
+                    const total = item.units.length;
+                    const available = item.units.filter((u) => u.status === "available").length;
+                    const borrowed = item.units.filter((u) => u.status === "borrowed").length;
+                    const maintenance = item.units.filter((u) => u.status === "maintenance").length;
+                    return (
+                      <EditableItemRow
+                        key={item.id}
+                        item={{
+                          id: item.id,
+                          name: item.name,
+                          description: item.description,
+                          merk: item.merk,
+                          type: item.type,
+                          kodeGudang: item.kodeGudang,
+                          categoryId: item.categoryId,
+                          category: item.category ? { name: item.category.name } : null,
+                          unitCount: total,
+                          availableCount: available,
+                          borrowedCount: borrowed,
+                          maintenanceCount: maintenance,
+                        }}
+                        categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+                      />
+                    );
+                  })}
                   {items.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-10 text-center text-sm text-zinc-500">
-                        Belum ada master barang. Klik dua kali baris untuk edit.
+                      <td colSpan={10} className="px-4 py-10 text-center text-sm text-zinc-500">
+                        Tidak ada master barang sesuai filter.
                       </td>
                     </tr>
                   ) : null}
@@ -186,7 +274,7 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Link
               href="/admin/barang?tab=units&status=available"
               className={`rounded-xl border px-4 py-3 flex items-center justify-between ${
@@ -220,6 +308,22 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
               </span>
             </Link>
             <Link
+              href="/admin/barang?tab=units&status=maintenance"
+              className={`rounded-xl border px-4 py-3 flex items-center justify-between ${
+                activeStatus === "maintenance"
+                  ? "border-violet-500/50 bg-violet-500/10"
+                  : "border-zinc-800 bg-zinc-900/60 hover:border-zinc-700"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Wrench className="w-4 h-4 text-violet-400" />
+                <span className="text-sm font-medium text-zinc-100">Maintenance</span>
+              </div>
+              <span className="text-xs px-2 py-1 rounded-full bg-zinc-800 text-zinc-200">
+                {maintenanceCount}
+              </span>
+            </Link>
+            <Link
               href="/admin/barang?tab=units&status=damaged"
               className={`rounded-xl border px-4 py-3 flex items-center justify-between ${
                 activeStatus === "damaged"
@@ -250,6 +354,7 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
                       <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Barang</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Kategori</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">QR Code</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Status</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Kondisi</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">QR</th>
                     </tr>
@@ -266,7 +371,16 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
                         <td className="px-4 py-2 text-zinc-300">{unit.item.category?.name ?? "-"}</td>
                         <td className="px-4 py-2 text-zinc-300 font-mono text-xs">{unit.qrCode}</td>
                         <td className="px-4 py-2">
-                          <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] ${STATUS_COLOR[unit.condition] ?? "bg-zinc-800 text-zinc-200"}`}>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] ${STATUS_COLOR[unit.status] ?? "bg-zinc-800 text-zinc-200"}`}
+                          >
+                            {unit.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] ${STATUS_COLOR[unit.condition] ?? "bg-zinc-800 text-zinc-200"}`}
+                          >
                             {unit.condition}
                           </span>
                         </td>

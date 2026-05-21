@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { db } from "@/lib/db";
 import { listInternalBorrowers } from "@/lib/internal-borrowers";
+import { getBorrowCatalog, getScannableUnits } from "@/lib/borrow-catalog";
 import { PinjamForm } from "./pinjam-form";
 import { AppBrand } from "@/components/app-logo";
 
@@ -10,20 +10,11 @@ type PinjamPageProps = {
 
 export default async function PinjamPage({ searchParams }: PinjamPageProps) {
   const params = await searchParams;
-  const units = await db.itemUnit.findMany({
-    where: { status: "available" },
-    include: {
-      item: {
-        include: {
-          category: true,
-        },
-      },
-    },
-    orderBy: [{ createdAt: "desc" }],
-    take: 200,
-  });
-
-  const internalBorrowers = await listInternalBorrowers();
+  const [catalog, scanUnits, internalBorrowers] = await Promise.all([
+    getBorrowCatalog(),
+    getScannableUnits(),
+    listInternalBorrowers(),
+  ]);
 
   return (
     <div className="min-h-screen bg-zinc-950 px-4 py-6">
@@ -41,14 +32,9 @@ export default async function PinjamPage({ searchParams }: PinjamPageProps) {
         </div>
       </div>
       <PinjamForm
+        catalog={catalog}
+        scanUnits={scanUnits}
         internalBorrowers={internalBorrowers}
-        units={units.map((unit) => ({
-          id: unit.id,
-          qrCode: unit.qrCode,
-          condition: unit.condition,
-          itemName: unit.item.name,
-          categoryName: unit.item.category?.name ?? null,
-        }))}
         successRef={params.success}
         errorMessage={params.error}
       />

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { Boxes, ArrowUpRight, Clock, AlertTriangle } from "lucide-react";
+import { Boxes, ArrowUpRight, Clock, AlertTriangle, Wrench, FileDown } from "lucide-react";
 import { formatTanggalID, startOfMonth, endOfMonth, STATUS_COLOR } from "@/lib/format";
+import { parseLoanLogFilters, buildRecapQueryString } from "@/lib/loan-filters";
+import { groupLoanItemsForPdf } from "@/lib/inventory";
 
 type DashboardPageProps = {
   searchParams: Promise<{
@@ -15,55 +17,41 @@ type DashboardPageProps = {
 export default async function AdminDashboardPage({ searchParams }: DashboardPageProps) {
   const params = await searchParams;
   const now = new Date();
-  const monthFilter = params.bulan ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const [yStr, mStr] = monthFilter.split("-");
-  const filterStart = new Date(Number(yStr), Number(mStr) - 1, 1);
-  const filterEnd = new Date(Number(yStr), Number(mStr), 1);
+  const {
+    monthFilter,
+    peminjamFilter,
+    barangFilter,
+    statusFilter,
+    where,
+  } = parseLoanLogFilters(params);
 
-  const peminjamFilter = (params.peminjam ?? "").trim();
-  const barangFilter = (params.barang ?? "").trim();
-  const statusFilter = params.status && ["pending", "approved", "returned"].includes(params.status) ? params.status : null;
-
-  const [available, borrowed, pending, thisMonthLoans, badCondition, loans] = await Promise.all([
-    db.itemUnit.count({ where: { status: "available" } }),
-    db.itemUnit.count({ where: { status: "borrowed" } }),
-    db.loan.count({ where: { status: "pending" } }),
-    db.loan.count({
-      where: { createdAt: { gte: startOfMonth(now), lt: endOfMonth(now) } },
-    }),
-    db.itemUnit.count({ where: { condition: { in: ["damaged", "lost"] } } }),
-    db.loan.findMany({
-      where: {
-        createdAt: { gte: filterStart, lt: filterEnd },
-        ...(statusFilter ? { status: statusFilter } : {}),
-        ...(peminjamFilter
-          ? { borrowerName: { contains: peminjamFilter, mode: "insensitive" } }
-          : {}),
-        ...(barangFilter
-          ? {
-              loanItems: {
-                some: {
-                  itemUnit: {
-                    item: { name: { contains: barangFilter, mode: "insensitive" } },
-                  },
-                },
-              },
-            }
-          : {}),
-      },
-      include: {
-        loanItems: {
-          include: {
-            itemUnit: { include: { item: true } },
+  const [available, borrowed, maintenance, pending, thisMonthLoans, badCondition, loans] =
+    await Promise.all([
+      db.itemUnit.count({ where: { status: "available" } }),
+      db.itemUnit.count({ where: { status: "borrowed" } }),
+      db.itemUnit.count({ where: { status: "maintenance" } }),
+      db.loan.count({ where: { status: "pending" } }),
+      db.loan.count({
+        where: { createdAt: { gte: startOfMonth(now), lt: endOfMonth(now) } },
+      }),
+      db.itemUnit.count({ where: { condition: { in: ["damaged", "lost"] } } }),
+      db.loan.findMany({
+        where,
+        include: {
+          loanItems: {
+            include: {
+              itemUnit: { include: { item: true } },
+            },
           },
         },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    }),
-  ]);
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+    ]);
 
   const currentMonthParam = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const recapHref = `/api/admin/recap/pdf${buildRecapQueryString(params)}`;
+
   const statCards = [
     {
       label: "Barang tersedia",
@@ -78,6 +66,13 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
       sublabel: "Unit aktif",
       icon: ArrowUpRight,
       href: "/admin/barang?tab=units&status=borrowed",
+    },
+    {
+      label: "Maintenance",
+      value: maintenance,
+      sublabel: "Tidak bisa dipinjam",
+      icon: Wrench,
+      href: "/admin/barang?tab=units&status=maintenance",
     },
     {
       label: "Request pending",
@@ -111,7 +106,7 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
         </p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {statCards.map((card) => {
           const Icon = card.icon;
           return (
@@ -136,9 +131,20 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
       </div>
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden">
-        <div className="px-4 py-3 border-b border-zinc-800">
-          <h2 className="text-sm font-medium text-white">Log Peminjaman</h2>
-          <p className="text-xs text-zinc-400">Filter sesuai kebutuhan.</p>
+        <div className="px-4 py-3 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-medium text-white">Log Peminjaman</h2>
+            <p className="text-xs text-zinc-400">Filter sesuai kebutuhan, lalu unduh rekap PDF.</p>
+          </div>
+          <a
+            href={recapHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 px-3 py-1.5 text-xs font-medium text-white"
+          >
+            <FileDown className="w-3.5 h-3.5" />
+            Unduh Rekap PDF
+          </a>
         </div>
 
         <form className="grid grid-cols-2 md:grid-cols-4 gap-2 p-3 border-b border-zinc-800">
@@ -199,15 +205,11 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
             </thead>
             <tbody>
               {loans.map((loan) => {
-                const itemNames = loan.loanItems
-                  .map((li) => li.itemUnit.item.name)
-                  .filter((v, i, arr) => arr.indexOf(v) === i)
+                const itemNames = groupLoanItemsForPdf(loan.loanItems)
+                  .map((g) => `${g.itemName} (${g.quantity})`)
                   .join(", ");
                 const cellLink = (children: React.ReactNode) => (
-                  <Link
-                    href={`/admin/peminjaman/${loan.id}`}
-                    className="block w-full"
-                  >
+                  <Link href={`/admin/peminjaman/${loan.id}`} className="block w-full">
                     {children}
                   </Link>
                 );
@@ -225,9 +227,7 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
                     <td className="px-4 py-2 whitespace-nowrap text-zinc-300">
                       {cellLink(formatTanggalID(loan.borrowDate))}
                     </td>
-                    <td className="px-4 py-2 text-zinc-300">
-                      {cellLink(itemNames)}
-                    </td>
+                    <td className="px-4 py-2 text-zinc-300">{cellLink(itemNames)}</td>
                     <td className="px-4 py-2 whitespace-nowrap">
                       <Link href={`/admin/peminjaman/${loan.id}`} className="block">
                         <span

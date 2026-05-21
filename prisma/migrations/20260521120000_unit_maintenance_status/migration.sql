@@ -1,0 +1,2 @@
+-- Item units: status may be available | borrowed | maintenance
+-- (column already exists as TEXT; this migration documents the new value)

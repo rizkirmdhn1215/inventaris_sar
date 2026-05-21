@@ -1,5 +1,5 @@
-import { db } from "@/lib/db";
 import { listInternalBorrowers } from "@/lib/internal-borrowers";
+import { getBorrowCatalog, getScannableUnits } from "@/lib/borrow-catalog";
 import { LandingClient } from "./landing-client";
 
 type HomeProps = {
@@ -12,14 +12,10 @@ type HomeProps = {
 
 export default async function Home({ searchParams }: HomeProps) {
   const params = await searchParams;
-  const units = await db.itemUnit.findMany({
-    where: { status: "available" },
-    include: {
-      item: { include: { category: true } },
-    },
-    orderBy: [{ createdAt: "desc" }],
-    take: 200,
-  });
+  const [catalog, scanUnits] = await Promise.all([
+    getBorrowCatalog(),
+    getScannableUnits(),
+  ]);
 
   const initialMode: "none" | "pinjam" | "external" =
     params.mode === "pinjam" || params.mode === "external" ? params.mode : "none";
@@ -29,13 +25,8 @@ export default async function Home({ searchParams }: HomeProps) {
   return (
     <LandingClient
       internalBorrowers={internalBorrowers}
-      units={units.map((unit) => ({
-        id: unit.id,
-        qrCode: unit.qrCode,
-        condition: unit.condition,
-        itemName: unit.item.name,
-        categoryName: unit.item.category?.name ?? null,
-      }))}
+      catalog={catalog}
+      scanUnits={scanUnits}
       successRef={params.success}
       errorMessage={params.error}
       initialMode={initialMode}

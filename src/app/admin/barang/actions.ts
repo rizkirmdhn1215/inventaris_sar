@@ -2,6 +2,10 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import {
+  adjustItemMaintenanceCount,
+  adjustItemUnitCount,
+} from "@/lib/inventory";
 
 export async function upsertItemAction(formData: FormData) {
   const id = String(formData.get("id") ?? "").trim();
@@ -36,4 +40,36 @@ export async function deleteItemAction(formData: FormData) {
     console.error("deleteItem error", e);
   }
   revalidatePath("/admin/barang");
+}
+
+export type InventoryActionResult = { error?: string; success?: string };
+
+export async function adjustUnitCountAction(
+  formData: FormData
+): Promise<InventoryActionResult> {
+  const itemId = String(formData.get("itemId") ?? "").trim();
+  const targetCount = Number(String(formData.get("targetCount") ?? ""));
+  if (!itemId) return { error: "ID barang tidak valid." };
+  try {
+    await adjustItemUnitCount(itemId, targetCount);
+    revalidatePath("/admin/barang");
+    return { success: "Jumlah unit diperbarui." };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function adjustMaintenanceAction(
+  formData: FormData
+): Promise<InventoryActionResult> {
+  const itemId = String(formData.get("itemId") ?? "").trim();
+  const targetMaintenance = Number(String(formData.get("targetMaintenance") ?? ""));
+  if (!itemId) return { error: "ID barang tidak valid." };
+  try {
+    await adjustItemMaintenanceCount(itemId, targetMaintenance);
+    revalidatePath("/admin/barang");
+    return { success: "Status maintenance diperbarui." };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
 }

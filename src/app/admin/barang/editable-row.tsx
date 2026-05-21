@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Trash2, Save, X } from "lucide-react";
 import { upsertItemAction, deleteItemAction } from "./actions";
+import { UnitCountControl, MaintenanceControl } from "./unit-controls";
 
 type Category = { id: string; name: string };
 
@@ -16,6 +17,9 @@ export type EditableItem = {
   categoryId: string | null;
   category: { name: string } | null;
   unitCount: number;
+  availableCount: number;
+  borrowedCount: number;
+  maintenanceCount: number;
 };
 
 export function EditableItemRow({
@@ -58,7 +62,7 @@ export function EditableItemRow({
       <tr
         className="border-b border-zinc-800/80 last:border-0 hover:bg-zinc-900/40 cursor-pointer"
         onDoubleClick={() => setEditing(true)}
-        title="Klik dua kali untuk edit"
+        title="Klik dua kali untuk edit metadata"
       >
         <td className="px-4 py-2 text-zinc-100">{item.name}</td>
         <td className="px-4 py-2 text-zinc-300">{item.category?.name ?? "-"}</td>
@@ -66,7 +70,17 @@ export function EditableItemRow({
         <td className="px-4 py-2 text-zinc-300">{item.type ?? "-"}</td>
         <td className="px-4 py-2 text-zinc-300 font-mono text-xs">{item.kodeGudang ?? "-"}</td>
         <td className="px-4 py-2 text-zinc-400 max-w-xs truncate">{item.description ?? "-"}</td>
-        <td className="px-4 py-2 text-zinc-300">{item.unitCount}</td>
+        <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+          <UnitCountControl itemId={item.id} totalCount={item.unitCount} />
+        </td>
+        <td className="px-4 py-2 text-emerald-300 text-xs">{item.availableCount}</td>
+        <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+          <MaintenanceControl
+            itemId={item.id}
+            maintenanceCount={item.maintenanceCount}
+            availableCount={item.availableCount}
+          />
+        </td>
         <td className="px-4 py-2">
           <button
             type="button"
@@ -138,6 +152,8 @@ export function EditableItemRow({
         />
       </td>
       <td className="px-2 py-2 text-zinc-400 text-xs">{item.unitCount}</td>
+      <td className="px-2 py-2 text-zinc-400 text-xs">{item.availableCount}</td>
+      <td className="px-2 py-2 text-zinc-400 text-xs">{item.maintenanceCount}</td>
       <td className="px-2 py-2 whitespace-nowrap">
         <button
           type="button"

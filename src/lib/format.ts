@@ -37,4 +37,5 @@ export const STATUS_COLOR: Record<string, string> = {
   lost: "bg-red-500/10 text-red-400",
   available: "bg-emerald-500/10 text-emerald-400",
   borrowed: "bg-orange-500/10 text-orange-400",
+  maintenance: "bg-violet-500/10 text-violet-400",
 };
