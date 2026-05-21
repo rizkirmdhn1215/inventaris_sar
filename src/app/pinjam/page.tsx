@@ -40,6 +40,7 @@ export default async function PinjamPage({ searchParams }: PinjamPageProps) {
       </div>
       <PinjamForm
         locationId={location.id}
+        locationSlug={location.slug}
         locationName={location.name}
         internalBorrowers={internalBorrowers}
         catalog={catalog}

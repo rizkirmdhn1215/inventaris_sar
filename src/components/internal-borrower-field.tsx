@@ -58,7 +58,7 @@ export function InternalBorrowerField({
       <input type="hidden" name="borrowerDivision" value={division} />
 
       <label className="block text-xs text-zinc-400 space-y-1">
-        Peminjam (Tim SAR)
+        Peminjam (Tim SAR — daftar sama di semua lokasi)
         <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-zinc-500" />
           <input

@@ -1,6 +1,7 @@
 import { listInternalBorrowers } from "@/lib/internal-borrowers";
 import { getBorrowCatalog, getScannableUnits } from "@/lib/borrow-catalog";
 import { getActiveLocations, getLocationBySlug } from "@/lib/location-scope";
+import { db } from "@/lib/db";
 import { LandingClient } from "./landing-client";
 
 type HomeProps = {
@@ -30,6 +31,16 @@ export default async function Home({ searchParams }: HomeProps) {
   const initialMode: "none" | "pinjam" | "external" =
     params.mode === "pinjam" || params.mode === "external" ? params.mode : "none";
 
+  let successLoanType: "internal" | "external" | null = null;
+  if (params.success) {
+    const loan = await db.loan.findUnique({
+      where: { id: params.success },
+      select: { loanType: true },
+    });
+    if (loan?.loanType === "external") successLoanType = "external";
+    else if (loan) successLoanType = "internal";
+  }
+
   return (
     <LandingClient
       locations={locations}
@@ -38,6 +49,7 @@ export default async function Home({ searchParams }: HomeProps) {
       catalog={catalog}
       scanUnits={scanUnits}
       successRef={params.success}
+      successLoanType={successLoanType}
       errorMessage={params.error}
       initialMode={initialMode}
     />

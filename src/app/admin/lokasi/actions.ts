@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { verifySession } from "@/lib/auth/session";
 import { hash } from "bcryptjs";
+import { copyInternalBorrowersToLocation } from "@/lib/internal-borrowers";
 
 function slugify(name: string) {
   return name
@@ -48,7 +49,7 @@ export async function createLocationAction(
     if (exists) return { error: `Slug "${slug}" sudah dipakai.` };
 
     const maxOrder = await db.location.aggregate({ _max: { sortOrder: true } });
-    await db.location.create({
+    const created = await db.location.create({
       data: {
         name,
         slug,
@@ -58,9 +59,13 @@ export async function createLocationAction(
       },
     });
 
+    const rosterCopied = await copyInternalBorrowersToLocation(created.id);
+
     revalidatePath("/admin/lokasi");
     revalidatePath("/");
-    return { success: `Lokasi ${name} berhasil dibuat.` };
+    return {
+      success: `Lokasi ${name} berhasil dibuat. Daftar peminjam internal (${rosterCopied} orang) disalin dari KPP Padang.`,
+    };
   } catch (e) {
     return { error: (e as Error).message };
   }

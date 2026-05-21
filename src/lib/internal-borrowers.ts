@@ -1,8 +1,17 @@
 import { db } from "@/lib/db";
+import { getDefaultLocation } from "@/lib/location-scope";
 
-export async function listInternalBorrowers(locationId: string) {
+/** Tim SAR roster is shared; canonical data lives at KPP Padang (seed). */
+export async function getCanonicalBorrowerLocationId() {
+  const loc = await getDefaultLocation();
+  return loc.id;
+}
+
+/** Same autocomplete roster at every gudang/pos. */
+export async function listInternalBorrowers(_locationId: string) {
+  const canonicalId = await getCanonicalBorrowerLocationId();
   return db.internalBorrower.findMany({
-    where: { locationId },
+    where: { locationId: canonicalId },
     orderBy: [{ lastUsedAt: "desc" }, { usageCount: "desc" }, { name: "asc" }],
     select: {
       id: true,
@@ -22,12 +31,49 @@ export function parseDdMmYyyy(value: string): Date | null {
   return new Date(year, month - 1, day);
 }
 
+/** Copy KPP roster into a new pos so local DB stays in sync (optional for reporting). */
+export async function copyInternalBorrowersToLocation(targetLocationId: string) {
+  const sourceId = await getCanonicalBorrowerLocationId();
+  if (sourceId === targetLocationId) return 0;
+
+  const source = await db.internalBorrower.findMany({
+    where: { locationId: sourceId },
+  });
+
+  let copied = 0;
+  for (const b of source) {
+    if (!b.nip) continue;
+    await db.internalBorrower.upsert({
+      where: {
+        locationId_nip: { locationId: targetLocationId, nip: b.nip },
+      },
+      update: {
+        name: b.name,
+        pangkat: b.pangkat,
+        jabatan: b.jabatan,
+        appointedAt: b.appointedAt,
+      },
+      create: {
+        locationId: targetLocationId,
+        nip: b.nip,
+        name: b.name,
+        pangkat: b.pangkat,
+        jabatan: b.jabatan,
+        appointedAt: b.appointedAt,
+      },
+    });
+    copied += 1;
+  }
+  return copied;
+}
+
 export async function rememberInternalBorrower(input: {
   locationId: string;
   borrowerId?: string | null;
   name: string;
   division: string;
 }) {
+  const canonicalLocationId = await getCanonicalBorrowerLocationId();
   const name = input.name.trim();
   const jabatan = input.division.trim();
   if (!name || !jabatan) return;
@@ -36,7 +82,7 @@ export async function rememberInternalBorrower(input: {
 
   if (input.borrowerId) {
     const updated = await db.internalBorrower.updateMany({
-      where: { id: input.borrowerId, locationId: input.locationId },
+      where: { id: input.borrowerId },
       data: {
         name,
         jabatan,
@@ -49,7 +95,7 @@ export async function rememberInternalBorrower(input: {
 
   const existing = await db.internalBorrower.findFirst({
     where: {
-      locationId: input.locationId,
+      locationId: canonicalLocationId,
       name: { equals: name, mode: "insensitive" },
     },
     select: { id: true },
@@ -68,6 +114,6 @@ export async function rememberInternalBorrower(input: {
   }
 
   await db.internalBorrower.create({
-    data: { locationId: input.locationId, name, jabatan },
+    data: { locationId: canonicalLocationId, name, jabatan },
   });
 }

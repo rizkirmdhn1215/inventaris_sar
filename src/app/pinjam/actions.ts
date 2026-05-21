@@ -5,6 +5,7 @@ import { rememberInternalBorrower } from "@/lib/internal-borrowers";
 import { redirect } from "next/navigation";
 import { sendPushToLocationAdmins } from "@/lib/push";
 import { allocateAvailableUnits } from "@/lib/inventory";
+import { resolveLoanLocationFromForm } from "@/lib/resolve-loan-location";
 
 export async function createLoanRequestAction(formData: FormData) {
   const borrowerName = String(formData.get("borrowerName") ?? "").trim();
@@ -24,24 +25,17 @@ export async function createLoanRequestAction(formData: FormData) {
   const contactVia = String(formData.get("contactVia") ?? "").trim() || null;
   const internalBorrowerId =
     String(formData.get("internalBorrowerId") ?? "").trim() || null;
-  const locationId = String(formData.get("locationId") ?? "").trim();
 
-  const borrowItemIds = formData.getAll("borrowItemId").map((v) => String(v));
-  const borrowQuantities = formData.getAll("borrowQuantity").map((v) => Number(String(v)));
-
-  const loc = locationId
-    ? await db.location.findFirst({
-        where: { id: locationId, isActive: true },
-        select: { slug: true },
-      })
-    : null;
-  const lokasiQs = loc ? `&lokasi=${encodeURIComponent(loc.slug)}` : "";
+  const resolved = await resolveLoanLocationFromForm(formData);
+  const lokasiQs = resolved ? `&lokasi=${encodeURIComponent(resolved.slug)}` : "";
   const backPath =
     (loanType === "external" ? "/?mode=external" : "/?mode=pinjam") + lokasiQs;
 
-  if (!locationId || !loc) {
-    redirect(`/?error=Pilih%20lokasi%20gudang%20terlebih%20dahulu`);
+  if (!resolved) {
+    redirect("/?error=Pilih%20lokasi%20gudang%20terlebih%20dahulu");
   }
+
+  const locationId = resolved.id;
 
   if (
     !borrowerName ||
@@ -60,6 +54,9 @@ export async function createLoanRequestAction(formData: FormData) {
       );
     }
   }
+
+  const borrowItemIds = formData.getAll("borrowItemId").map((v) => String(v));
+  const borrowQuantities = formData.getAll("borrowQuantity").map((v) => Number(String(v)));
 
   const lines = borrowItemIds
     .map((itemId, i) => ({
@@ -145,5 +142,6 @@ export async function createLoanRequestAction(formData: FormData) {
     console.warn("Push notification skipped:", (err as Error).message);
   }
 
-  redirect(`/?success=${loan.id}${lokasiQs}`);
+  const modeQs = loanType === "external" ? "&mode=external" : "&mode=pinjam";
+  redirect(`/?success=${loan.id}${lokasiQs}${modeQs}`);
 }

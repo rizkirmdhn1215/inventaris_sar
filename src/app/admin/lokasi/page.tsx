@@ -36,7 +36,8 @@ export default async function LokasiAdminPage() {
         <h1 className="text-xl sm:text-2xl font-semibold text-white">Lokasi & Admin Daerah</h1>
         <p className="text-sm text-zinc-400 mt-1">
           Super Admin: buat Pos SAR / KPP lain, tetapkan admin regional, pantau inventaris per
-          daerah.
+          daerah. Peminjaman internal memakai daftar Tim SAR yang sama (sumber KPP Padang) di semua
+          lokasi.
         </p>
       </div>
 

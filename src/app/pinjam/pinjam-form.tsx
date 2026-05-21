@@ -25,6 +25,7 @@ type SelectedLine = BorrowCatalogItem & { quantity: number };
 
 export function PinjamForm({
   locationId,
+  locationSlug,
   locationName,
   catalog,
   scanUnits,
@@ -34,6 +35,7 @@ export function PinjamForm({
   external = false,
 }: {
   locationId: string;
+  locationSlug: string;
   locationName: string;
   catalog: BorrowCatalogItem[];
   scanUnits: ScanUnitOption[];
@@ -239,6 +241,7 @@ export function PinjamForm({
 
       <form action={createLoanRequestAction} className="space-y-3 sm:space-y-4">
         <input type="hidden" name="locationId" value={locationId} />
+        <input type="hidden" name="lokasi" value={locationSlug} />
         <input type="hidden" name="loanType" value={external ? "external" : "internal"} />
         <p className="text-xs text-orange-200/90 rounded-lg border border-orange-900/30 bg-orange-950/20 px-3 py-2">
           Gudang: <strong>{locationName}</strong>

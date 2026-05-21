@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ClipboardList,
   Building2,
+  FileText,
 } from "lucide-react";
 import { PinjamForm } from "./pinjam/pinjam-form";
 import { AppBrand, AppLogo } from "@/components/app-logo";
@@ -24,6 +25,7 @@ type LandingClientProps = {
   scanUnits: ScanUnitOption[];
   internalBorrowers: InternalBorrowerOption[];
   successRef?: string;
+  successLoanType?: "internal" | "external" | null;
   errorMessage?: string;
   initialMode?: "none" | "pinjam" | "external";
 };
@@ -37,12 +39,17 @@ export function LandingClient({
   scanUnits,
   internalBorrowers,
   successRef,
+  successLoanType,
   errorMessage,
   initialMode = "none",
 }: LandingClientProps) {
-  const [mode, setMode] = useState<Mode>(
-    successRef ? initialMode || "pinjam" : initialMode
-  );
+  const [mode, setMode] = useState<Mode>(() => {
+    if (successRef) {
+      return successLoanType === "external" ? "external" : "pinjam";
+    }
+    if (initialMode === "pinjam" || initialMode === "external") return initialMode;
+    return "none";
+  });
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -70,6 +77,16 @@ export function LandingClient({
       </header>
 
       <main className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-10 space-y-4 sm:space-y-6">
+        {successRef && selectedLocation ? (
+          <LoanSuccessBanner loanId={successRef} />
+        ) : null}
+
+        {errorMessage ? (
+          <p className="text-sm text-red-300 bg-red-950/40 border border-red-900/40 rounded-lg px-3 py-2">
+            {errorMessage}
+          </p>
+        ) : null}
+
         {mode === "none" ? (
           <section className="text-center space-y-3 py-4 sm:py-8">
             <AppLogo size="lg" className="mx-auto" priority />
@@ -117,22 +134,24 @@ export function LandingClient({
           <ServiceCard
             active={mode === "pinjam"}
             collapsed={mode === "external"}
-            disabled={false}
-            onClick={() =>
-              setMode((m) => (m === "pinjam" ? "none" : "pinjam"))
-            }
+            disabled={!selectedLocation}
+            onClick={() => {
+              if (!selectedLocation) return;
+              setMode((m) => (m === "pinjam" ? "none" : "pinjam"));
+            }}
             icon={<ClipboardList className="w-5 h-5 sm:w-6 sm:h-6" />}
             title="Peminjaman Internal"
-            description="Untuk Tim SAR Padang. Ajukan permintaan peminjaman barang operasional."
+            description="Tim SAR — autofill nama & jabatan (daftar sama seperti KPP Padang)."
             cta="Mulai Pinjam"
           />
           <ServiceCard
             active={mode === "external"}
             collapsed={mode === "pinjam"}
-            disabled={false}
-            onClick={() =>
-              setMode((m) => (m === "external" ? "none" : "external"))
-            }
+            disabled={!selectedLocation}
+            onClick={() => {
+              if (!selectedLocation) return;
+              setMode((m) => (m === "external" ? "none" : "external"));
+            }}
             icon={<Building2 className="w-5 h-5 sm:w-6 sm:h-6" />}
             title="Peminjaman Eksternal"
             description="Untuk instansi lain di luar Tim SAR. Sertakan instansi, nomor surat & contact person."
@@ -156,6 +175,7 @@ export function LandingClient({
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3 sm:p-6">
             <PinjamForm
               locationId={selectedLocation.id}
+              locationSlug={selectedLocation.slug}
               locationName={selectedLocation.name}
               catalog={catalog}
               scanUnits={scanUnits}
@@ -171,6 +191,7 @@ export function LandingClient({
             <PinjamForm
               external
               locationId={selectedLocation.id}
+              locationSlug={selectedLocation.slug}
               locationName={selectedLocation.name}
               catalog={catalog}
               scanUnits={scanUnits}
@@ -272,6 +293,30 @@ function ServiceCard({
         </div>
       </div>
     </button>
+  );
+}
+
+function LoanSuccessBanner({ loanId }: { loanId: string }) {
+  return (
+    <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/40 px-3 py-3 space-y-2">
+      <p className="text-sm text-emerald-300">
+        Request berhasil dikirim. Nomor referensi:{" "}
+        <strong className="font-mono">{loanId}</strong>
+      </p>
+      <p className="text-xs text-emerald-200/80">
+        Draft surat peminjaman (watermark DRAFT). Setelah disetujui admin, surat resmi
+        tanpa watermark akan diberikan.
+      </p>
+      <a
+        href={`/api/loans/${loanId}/pdf?draft=1`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 px-3 py-1.5 text-xs font-medium text-white"
+      >
+        <FileText className="w-3.5 h-3.5" />
+        Lihat / Unduh Draft Surat
+      </a>
+    </div>
   );
 }
 
