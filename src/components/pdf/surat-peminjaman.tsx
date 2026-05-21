@@ -49,6 +49,8 @@ const styles = StyleSheet.create({
   signGroup: { marginTop: 24 },
   signRow: { flexDirection: "row", justifyContent: "space-between" },
   signBox: { width: "40%", textAlign: "center" },
+  /** Blank line so peminjam signature aligns with petugas (date line on the right). */
+  signLabelSpacer: { fontSize: 11, lineHeight: 1.4 },
   signLine: { marginTop: 50, borderTopWidth: 1, borderTopColor: "#0a0a0a", paddingTop: 4 },
   signNip: { marginTop: 4, fontSize: 9, color: "#404040" },
   signCenterRow: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
@@ -193,6 +195,7 @@ export function SuratPeminjamanDocument(props: SuratPeminjamanProps) {
           <View style={styles.signRow}>
             <View style={styles.signBox}>
               <Text>Peminjam,</Text>
+              <Text style={styles.signLabelSpacer}>{" "}</Text>
               <Text style={styles.signLine}>{props.borrowerSignerName}</Text>
             </View>
             <View style={styles.signBox}>
