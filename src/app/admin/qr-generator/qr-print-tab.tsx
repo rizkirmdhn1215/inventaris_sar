@@ -5,7 +5,7 @@ import QRCode from "qrcode";
 import { Search, Printer, CheckSquare, Square } from "lucide-react";
 import { QR_LABELS_PER_PAGE, type QrLabelEntry } from "./constants";
 import { QrPrintGrid, pageCountForLabels } from "./qr-print-grid";
-import { QrPrintStyles } from "./qr-print-styles";
+import { printQrLabelSheet } from "./print-qr-sheet";
 
 export type CatalogUnit = {
   unitId: string;
@@ -121,9 +121,7 @@ export function QrPrintTab({ catalog }: { catalog: CatalogItem[] }) {
 
   return (
     <div className="space-y-4">
-      <QrPrintStyles rootClass="qr-print-select-root" />
-
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-4 print:hidden">
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-4">
         <div>
           <h2 className="text-sm font-medium text-white">Cetak QR Barang Existing</h2>
           <p className="text-xs text-zinc-400 mt-1">
@@ -253,7 +251,7 @@ export function QrPrintTab({ catalog }: { catalog: CatalogItem[] }) {
           </p>
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={() => printQrLabelSheet(selectedLabels, images)}
             disabled={selectedLabels.length === 0 || preparing}
             className="inline-flex items-center gap-2 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 px-4 py-2 text-sm font-medium text-white"
           >
@@ -264,15 +262,11 @@ export function QrPrintTab({ catalog }: { catalog: CatalogItem[] }) {
       </div>
 
       {selectedLabels.length > 0 ? (
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 print:hidden">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
           <h3 className="text-sm font-medium text-white mb-2">
             Preview ({selectedLabels.length} label, {pageCount} halaman @ {QR_LABELS_PER_PAGE}/hal)
           </h3>
-          <QrPrintGrid
-            labels={selectedLabels}
-            images={images}
-            printRootClass="qr-print-select-root"
-          />
+          <QrPrintGrid labels={selectedLabels} images={images} />
         </div>
       ) : null}
     </div>

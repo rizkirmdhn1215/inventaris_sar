@@ -4,7 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { generateQrAction } from "./actions";
 import QRCode from "qrcode";
 import { QrPrintGrid } from "./qr-print-grid";
-import { QrPrintStyles } from "./qr-print-styles";
+import { printQrLabelSheet } from "./print-qr-sheet";
 import type { QrLabelEntry } from "./constants";
 
 type Category = { id: string; name: string };
@@ -49,9 +49,7 @@ export function QrCreateTab({
 
   return (
     <div className="space-y-4">
-      <QrPrintStyles rootClass="qr-print-create-root" />
-
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 sm:p-6 print:hidden">
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 sm:p-6">
         <p className="text-sm text-zinc-400 mb-4">
           Isi per baris: nama barang, kategori, jumlah unit baru. Barang yang sudah ada akan
           ditambah unit berikutnya.
@@ -153,7 +151,7 @@ export function QrCreateTab({
             </button>
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={() => printQrLabelSheet(labels, images)}
               disabled={!labels.length}
               className="rounded-xl border border-zinc-700 hover:border-zinc-600 disabled:opacity-50 px-4 py-2 text-sm font-medium text-zinc-100"
             >
@@ -163,12 +161,11 @@ export function QrCreateTab({
         </form>
       </div>
 
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 sm:p-6 print:border-0 print:bg-transparent print:p-0">
-        <h2 className="text-sm font-medium text-white mb-3 print:hidden">Preview stiker</h2>
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 sm:p-6">
+        <h2 className="text-sm font-medium text-white mb-3">Preview stiker</h2>
         <QrPrintGrid
           labels={labels}
           images={images}
-          printRootClass="qr-print-create-root"
           emptyMessage="Belum ada data QR. Generate dulu untuk lihat preview."
         />
       </div>
