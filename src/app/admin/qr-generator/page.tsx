@@ -15,11 +15,37 @@ export default async function QrGeneratorPage({ searchParams }: QrPageProps) {
     orderBy: { name: "asc" },
   });
 
+  const items = await db.item.findMany({
+    where: { locationId: scope.locationId },
+    include: {
+      category: { select: { name: true } },
+      units: {
+        orderBy: { qrCode: "asc" },
+        select: { id: true, qrCode: true, status: true },
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  const catalog = items
+    .filter((item) => item.units.length > 0)
+    .map((item) => ({
+      itemId: item.id,
+      itemName: item.name,
+      categoryName: item.category?.name ?? null,
+      units: item.units.map((u) => ({
+        unitId: u.id,
+        qrCode: u.qrCode,
+        status: u.status,
+      })),
+    }));
+
   return (
     <QrGeneratorClient
       locationId={scope.locationId}
       locationName={scope.activeLocation.name}
       categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+      catalog={catalog}
     />
   );
 }
