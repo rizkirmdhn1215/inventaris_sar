@@ -5,9 +5,10 @@ import { revalidatePath } from "next/cache";
 
 export async function createCategoryAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
-  if (!name) return;
+  const locationId = String(formData.get("locationId") ?? "").trim();
+  if (!name || !locationId) return;
   try {
-    await db.itemCategory.create({ data: { name } });
+    await db.itemCategory.create({ data: { name, locationId } });
   } catch (e) {
     // ignore unique conflict
     console.error("createCategory error", e);

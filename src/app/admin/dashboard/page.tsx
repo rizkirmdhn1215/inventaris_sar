@@ -1,9 +1,15 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { Boxes, ArrowUpRight, Clock, AlertTriangle, Wrench, FileDown } from "lucide-react";
+import { Boxes, ArrowUpRight, Clock, AlertTriangle, Wrench, FileDown, MapPin } from "lucide-react";
 import { formatTanggalID, startOfMonth, endOfMonth, STATUS_COLOR } from "@/lib/format";
 import { parseLoanLogFilters, buildRecapQueryString } from "@/lib/loan-filters";
 import { groupLoanItemsForPdf } from "@/lib/inventory";
+import { requireAdminPageScope } from "@/lib/admin-page";
+import {
+  getAllLocationStats,
+  appendLokasiQuery,
+  locationTypeLabel,
+} from "@/lib/location-scope";
 
 type DashboardPageProps = {
   searchParams: Promise<{
@@ -11,30 +17,44 @@ type DashboardPageProps = {
     peminjam?: string;
     barang?: string;
     status?: string;
+    lokasi?: string;
   }>;
 };
 
 export default async function AdminDashboardPage({ searchParams }: DashboardPageProps) {
   const params = await searchParams;
+  const { scope } = await requireAdminPageScope(params.lokasi);
   const now = new Date();
+  const showAllSitesOverview = scope.isSuperAdmin && !params.lokasi;
+
   const {
     monthFilter,
     peminjamFilter,
     barangFilter,
     statusFilter,
     where,
-  } = parseLoanLogFilters(params);
+  } = parseLoanLogFilters(
+    { ...params, lokasi: scope.activeLocation.slug },
+    scope.locationId
+  );
 
-  const [available, borrowed, maintenance, pending, thisMonthLoans, badCondition, loans] =
+  const locItemFilter = { item: { locationId: scope.locationId } };
+
+  const [available, borrowed, maintenance, pending, thisMonthLoans, badCondition, loans, allStats] =
     await Promise.all([
-      db.itemUnit.count({ where: { status: "available" } }),
-      db.itemUnit.count({ where: { status: "borrowed" } }),
-      db.itemUnit.count({ where: { status: "maintenance" } }),
-      db.loan.count({ where: { status: "pending" } }),
+      db.itemUnit.count({ where: { status: "available", ...locItemFilter } }),
+      db.itemUnit.count({ where: { status: "borrowed", ...locItemFilter } }),
+      db.itemUnit.count({ where: { status: "maintenance", ...locItemFilter } }),
+      db.loan.count({ where: { locationId: scope.locationId, status: "pending" } }),
       db.loan.count({
-        where: { createdAt: { gte: startOfMonth(now), lt: endOfMonth(now) } },
+        where: {
+          locationId: scope.locationId,
+          createdAt: { gte: startOfMonth(now), lt: endOfMonth(now) },
+        },
       }),
-      db.itemUnit.count({ where: { condition: { in: ["damaged", "lost"] } } }),
+      db.itemUnit.count({
+        where: { condition: { in: ["damaged", "lost"] }, ...locItemFilter },
+      }),
       db.loan.findMany({
         where,
         include: {
@@ -47,10 +67,11 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
         orderBy: { createdAt: "desc" },
         take: 50,
       }),
+      showAllSitesOverview ? getAllLocationStats() : Promise.resolve([]),
     ]);
 
   const currentMonthParam = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const recapHref = `/api/admin/recap/pdf${buildRecapQueryString(params)}`;
+  const lokasiQs = scope.activeLocation.slug;
 
   const statCards = [
     {
@@ -58,53 +79,86 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
       value: available,
       sublabel: "Unit di gudang",
       icon: Boxes,
-      href: "/admin/barang?tab=units&status=available",
+      href: appendLokasiQuery("/admin/barang?tab=units&status=available", lokasiQs),
     },
     {
       label: "Sedang dipinjam",
       value: borrowed,
       sublabel: "Unit aktif",
       icon: ArrowUpRight,
-      href: "/admin/barang?tab=units&status=borrowed",
+      href: appendLokasiQuery("/admin/barang?tab=units&status=borrowed", lokasiQs),
     },
     {
       label: "Maintenance",
       value: maintenance,
       sublabel: "Tidak bisa dipinjam",
       icon: Wrench,
-      href: "/admin/barang?tab=units&status=maintenance",
+      href: appendLokasiQuery("/admin/barang?tab=units&status=maintenance", lokasiQs),
     },
     {
       label: "Request pending",
       value: pending,
       sublabel: "Menunggu approve",
       icon: Clock,
-      href: "/admin/peminjaman?status=pending",
+      href: appendLokasiQuery("/admin/peminjaman?status=pending", lokasiQs),
     },
     {
       label: "Pinjam bulan ini",
       value: thisMonthLoans,
       sublabel: formatTanggalID(now),
       icon: Clock,
-      href: `/admin/dashboard?bulan=${currentMonthParam}`,
+      href: appendLokasiQuery(`/admin/dashboard?bulan=${currentMonthParam}`, lokasiQs),
     },
     {
       label: "Rusak / hilang",
       value: badCondition,
       sublabel: "Perlu tindak lanjut",
       icon: AlertTriangle,
-      href: "/admin/barang?tab=units&status=damaged",
+      href: appendLokasiQuery("/admin/barang?tab=units&status=damaged", lokasiQs),
     },
   ];
+
+  const recapHref = `/api/admin/recap/pdf${buildRecapQueryString({
+    ...params,
+    lokasi: lokasiQs,
+  })}`;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl sm:text-2xl font-semibold text-white">Dashboard</h1>
         <p className="text-sm text-zinc-400 mt-1">
-          Ringkasan kondisi barang & aktivitas peminjaman.
+          {showAllSitesOverview
+            ? "Ringkasan semua lokasi — pilih lokasi di atas untuk detail per daerah."
+            : `Inventaris & peminjaman: ${scope.activeLocation.name}`}
         </p>
       </div>
+
+      {showAllSitesOverview && allStats.length > 0 ? (
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
+          <h2 className="text-sm font-medium text-white flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-orange-400" />
+            Pantau Semua Lokasi
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {allStats.map((st) => (
+              <Link
+                key={st.locationId}
+                href={appendLokasiQuery("/admin/dashboard", st.slug)}
+                className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 hover:border-orange-500/40 transition-colors"
+              >
+                <p className="text-sm font-medium text-zinc-100">{st.name}</p>
+                <p className="text-[11px] text-zinc-500">{locationTypeLabel(st.type)}</p>
+                <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                  <span className="text-emerald-400">{st.available} tersedia</span>
+                  <span className="text-orange-400">{st.borrowed} dipinjam</span>
+                  <span className="text-amber-400">{st.pendingLoans} pending</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {statCards.map((card) => {
@@ -134,7 +188,9 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
         <div className="px-4 py-3 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-medium text-white">Log Peminjaman</h2>
-            <p className="text-xs text-zinc-400">Filter sesuai kebutuhan, lalu unduh rekap PDF.</p>
+            <p className="text-xs text-zinc-400">
+              {scope.activeLocation.name} — filter & unduh rekap PDF.
+            </p>
           </div>
           <a
             href={recapHref}
@@ -148,6 +204,7 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
         </div>
 
         <form className="grid grid-cols-2 md:grid-cols-4 gap-2 p-3 border-b border-zinc-800">
+          <input type="hidden" name="lokasi" value={lokasiQs} />
           <input
             type="month"
             name="bulan"
@@ -184,7 +241,7 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
               Filter
             </button>
             <Link
-              href="/admin/dashboard"
+              href={appendLokasiQuery("/admin/dashboard", lokasiQs)}
               className="rounded-lg border border-zinc-700 hover:border-zinc-600 px-4 py-2 text-sm text-zinc-200"
             >
               Reset

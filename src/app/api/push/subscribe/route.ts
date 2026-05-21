@@ -30,10 +30,26 @@ export async function POST(req: Request) {
     );
   }
 
+  const admin = await db.admin.findUnique({
+    where: { id: session.adminId },
+    select: { locationId: true, role: true },
+  });
+
   await db.pushSubscription.upsert({
     where: { endpoint },
-    update: { p256dh, auth },
-    create: { endpoint, p256dh, auth },
+    update: {
+      p256dh,
+      auth,
+      adminId: session.adminId,
+      locationId: admin?.role === "superadmin" ? null : admin?.locationId ?? null,
+    },
+    create: {
+      endpoint,
+      p256dh,
+      auth,
+      adminId: session.adminId,
+      locationId: admin?.role === "superadmin" ? null : admin?.locationId ?? null,
+    },
   });
 
   return NextResponse.json({ ok: true });

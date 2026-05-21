@@ -30,6 +30,7 @@ type AccountMenuProps = {
   adminImageUrl: string | null;
   adminNip: string | null;
   adminRole: string;
+  locations?: { id: string; name: string }[];
 };
 
 export function AccountMenu({
@@ -39,6 +40,7 @@ export function AccountMenu({
   adminImageUrl: initialImageUrl,
   adminNip: initialNip,
   adminRole,
+  locations = [],
 }: AccountMenuProps) {
   const router = useRouter();
   const [isLoggingOut, startLogout] = useTransition();
@@ -285,7 +287,11 @@ export function AccountMenu({
       />
 
       {isSuperAdmin ? (
-        <AddAdminModal open={addAdminOpen} onClose={() => setAddAdminOpen(false)} />
+        <AddAdminModal
+          open={addAdminOpen}
+          onClose={() => setAddAdminOpen(false)}
+          locations={locations}
+        />
       ) : null}
     </>
   );

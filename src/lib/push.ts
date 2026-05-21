@@ -16,19 +16,11 @@ function configure() {
   return true;
 }
 
-export async function sendPushToAllAdmins(payload: {
-  title: string;
-  body: string;
-  url?: string;
-}) {
-  if (!configure()) {
-    console.warn("Push: VAPID env not configured, skipping.");
-    return;
-  }
-
-  const subscriptions = await db.pushSubscription.findMany();
+async function sendToSubscriptions(
+  subscriptions: { id: string; endpoint: string; p256dh: string; auth: string }[],
+  payload: { title: string; body: string; url?: string }
+) {
   const json = JSON.stringify(payload);
-
   await Promise.all(
     subscriptions.map(async (sub) => {
       try {
@@ -42,14 +34,47 @@ export async function sendPushToAllAdmins(payload: {
       } catch (err: unknown) {
         const status = (err as { statusCode?: number })?.statusCode;
         if (status === 404 || status === 410) {
-          // expired subscription
-          await db.pushSubscription
-            .delete({ where: { id: sub.id } })
-            .catch(() => null);
+          await db.pushSubscription.delete({ where: { id: sub.id } }).catch(() => null);
         } else {
           console.error("Push send error:", err);
         }
       }
     })
   );
+}
+
+/** Notify admins responsible for a location (regional + superadmin). */
+export async function sendPushToLocationAdmins(
+  locationId: string,
+  payload: { title: string; body: string; url?: string }
+) {
+  if (!configure()) {
+    console.warn("Push: VAPID env not configured, skipping.");
+    return;
+  }
+
+  const [locationSubs, superSubs] = await Promise.all([
+    db.pushSubscription.findMany({ where: { locationId } }),
+    db.pushSubscription.findMany({ where: { locationId: null } }),
+  ]);
+
+  const seen = new Set<string>();
+  const merged = [...locationSubs, ...superSubs].filter((s) => {
+    if (seen.has(s.endpoint)) return false;
+    seen.add(s.endpoint);
+    return true;
+  });
+
+  await sendToSubscriptions(merged, payload);
+}
+
+/** @deprecated use sendPushToLocationAdmins */
+export async function sendPushToAllAdmins(payload: {
+  title: string;
+  body: string;
+  url?: string;
+}) {
+  if (!configure()) return;
+  const subscriptions = await db.pushSubscription.findMany();
+  await sendToSubscriptions(subscriptions, payload);
 }

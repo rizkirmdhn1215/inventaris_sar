@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { rememberInternalBorrower } from "@/lib/internal-borrowers";
 import { redirect } from "next/navigation";
-import { sendPushToAllAdmins } from "@/lib/push";
+import { sendPushToLocationAdmins } from "@/lib/push";
 import { allocateAvailableUnits } from "@/lib/inventory";
 
 export async function createLoanRequestAction(formData: FormData) {
@@ -24,11 +24,24 @@ export async function createLoanRequestAction(formData: FormData) {
   const contactVia = String(formData.get("contactVia") ?? "").trim() || null;
   const internalBorrowerId =
     String(formData.get("internalBorrowerId") ?? "").trim() || null;
+  const locationId = String(formData.get("locationId") ?? "").trim();
 
   const borrowItemIds = formData.getAll("borrowItemId").map((v) => String(v));
   const borrowQuantities = formData.getAll("borrowQuantity").map((v) => Number(String(v)));
 
-  const backPath = loanType === "external" ? "/?mode=external" : "/?mode=pinjam";
+  const loc = locationId
+    ? await db.location.findFirst({
+        where: { id: locationId, isActive: true },
+        select: { slug: true },
+      })
+    : null;
+  const lokasiQs = loc ? `&lokasi=${encodeURIComponent(loc.slug)}` : "";
+  const backPath =
+    (loanType === "external" ? "/?mode=external" : "/?mode=pinjam") + lokasiQs;
+
+  if (!locationId || !loc) {
+    redirect(`/?error=Pilih%20lokasi%20gudang%20terlebih%20dahulu`);
+  }
 
   if (
     !borrowerName ||
@@ -63,18 +76,22 @@ export async function createLoanRequestAction(formData: FormData) {
   const unitsToLoan: { id: string; condition: string }[] = [];
 
   for (const line of lines) {
+    const item = await db.item.findFirst({
+      where: { id: line.itemId, locationId },
+      select: { name: true },
+    });
+    if (!item) {
+      redirect(`${backPath}&error=Barang%20tidak%20valid%20untuk%20lokasi%20ini`);
+    }
+
     const allocated = await allocateAvailableUnits(
       line.itemId,
       line.quantity,
       usedUnitIds
     );
     if (!allocated) {
-      const item = await db.item.findUnique({
-        where: { id: line.itemId },
-        select: { name: true },
-      });
       redirect(
-        `${backPath}&error=Stok%20${encodeURIComponent(item?.name ?? "barang")}%20tidak%20cukup%20(${line.quantity}%20diminta)`
+        `${backPath}&error=Stok%20${encodeURIComponent(item.name)}%20tidak%20cukup%20(${line.quantity}%20diminta)`
       );
     }
     for (const u of allocated) {
@@ -85,6 +102,7 @@ export async function createLoanRequestAction(formData: FormData) {
 
   const loan = await db.loan.create({
     data: {
+      locationId,
       borrowerName,
       borrowerDivision,
       purpose,
@@ -109,6 +127,7 @@ export async function createLoanRequestAction(formData: FormData) {
 
   if (loanType === "internal") {
     await rememberInternalBorrower({
+      locationId,
       borrowerId: internalBorrowerId,
       name: borrowerName,
       division: borrowerDivision,
@@ -117,7 +136,7 @@ export async function createLoanRequestAction(formData: FormData) {
 
   const totalUnits = unitsToLoan.length;
   try {
-    await sendPushToAllAdmins({
+    await sendPushToLocationAdmins(locationId, {
       title: "Request peminjaman baru",
       body: `${borrowerName} (${borrowerDivision}) mengajukan ${totalUnits} unit barang.`,
       url: `/admin/peminjaman/${loan.id}`,
@@ -126,5 +145,5 @@ export async function createLoanRequestAction(formData: FormData) {
     console.warn("Push notification skipped:", (err as Error).message);
   }
 
-  redirect(`/?success=${loan.id}`);
+  redirect(`/?success=${loan.id}${lokasiQs}`);
 }

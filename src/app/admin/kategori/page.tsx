@@ -5,9 +5,18 @@ import {
   renameCategoryAction,
   deleteCategoryAction,
 } from "./actions";
+import { requireAdminPageScope } from "@/lib/admin-page";
 
-export default async function KategoriPage() {
+type KategoriPageProps = {
+  searchParams: Promise<{ lokasi?: string }>;
+};
+
+export default async function KategoriPage({ searchParams }: KategoriPageProps) {
+  const params = await searchParams;
+  const { scope } = await requireAdminPageScope(params.lokasi);
+
   const categories = await db.itemCategory.findMany({
+    where: { locationId: scope.locationId },
     orderBy: { name: "asc" },
     include: { _count: { select: { items: true } } },
   });
@@ -17,7 +26,7 @@ export default async function KategoriPage() {
       <div>
         <h1 className="text-xl sm:text-2xl font-semibold text-white">Kategori Barang</h1>
         <p className="text-sm text-zinc-400 mt-1">
-          Kelola jenis kategori untuk pengelompokan barang.
+          Kategori untuk <strong className="text-zinc-300">{scope.activeLocation.name}</strong>.
         </p>
       </div>
 
@@ -25,6 +34,7 @@ export default async function KategoriPage() {
         action={createCategoryAction}
         className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col sm:flex-row gap-2"
       >
+        <input type="hidden" name="locationId" value={scope.locationId} />
         <input
           name="name"
           required
@@ -41,49 +51,56 @@ export default async function KategoriPage() {
       </form>
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden">
-        <div className="px-4 py-3 border-b border-zinc-800 text-sm text-zinc-300 flex items-center gap-2">
-          <Tags className="w-4 h-4 text-orange-400" /> {categories.length} kategori
-        </div>
-        {categories.length === 0 ? (
-          <p className="px-4 py-10 text-center text-sm text-zinc-500">
-            Belum ada kategori.
-          </p>
-        ) : (
-          <ul className="divide-y divide-zinc-800">
+        <table className="min-w-full text-sm">
+          <thead className="bg-zinc-900/80 border-b border-zinc-800">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Nama</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Barang</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
             {categories.map((cat) => (
-              <li key={cat.id} className="p-3 flex flex-col sm:flex-row gap-2 sm:items-center">
-                <form action={renameCategoryAction} className="flex-1 flex gap-2">
-                  <input type="hidden" name="id" value={cat.id} />
-                  <input
-                    name="name"
-                    defaultValue={cat.name}
-                    className="flex-1 rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
-                  />
-                  <button
-                    type="submit"
-                    className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 hover:border-zinc-600 px-3 py-2 text-xs text-zinc-100"
-                  >
-                    <Save className="w-3.5 h-3.5" /> Simpan
-                  </button>
-                </form>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-400 px-2 py-1 rounded-full bg-zinc-800">
-                    {cat._count.items} barang
-                  </span>
+              <tr key={cat.id} className="border-b border-zinc-800/80 last:border-0">
+                <td className="px-4 py-2">
+                  <form action={renameCategoryAction} className="flex gap-2">
+                    <input type="hidden" name="id" value={cat.id} />
+                    <input
+                      name="name"
+                      defaultValue={cat.name}
+                      className="flex-1 rounded-lg bg-zinc-950 border border-zinc-800 px-2 py-1 text-sm text-white"
+                    />
+                    <button
+                      type="submit"
+                      className="inline-flex items-center gap-1 text-xs text-emerald-300"
+                    >
+                      <Save className="w-3.5 h-3.5" /> Simpan
+                    </button>
+                  </form>
+                </td>
+                <td className="px-4 py-2 text-zinc-300">{cat._count.items}</td>
+                <td className="px-4 py-2">
                   <form action={deleteCategoryAction}>
                     <input type="hidden" name="id" value={cat.id} />
                     <button
                       type="submit"
-                      className="inline-flex items-center gap-1 rounded-lg border border-red-900/50 text-red-300 hover:bg-red-950/40 px-3 py-2 text-xs"
+                      className="inline-flex items-center gap-1 text-xs text-red-300"
                     >
                       <Trash2 className="w-3.5 h-3.5" /> Hapus
                     </button>
                   </form>
-                </div>
-              </li>
+                </td>
+              </tr>
             ))}
-          </ul>
-        )}
+            {categories.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="px-4 py-10 text-center text-zinc-500">
+                  Belum ada kategori di lokasi ini.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
       </div>
     </div>
   );

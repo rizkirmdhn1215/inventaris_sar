@@ -3,6 +3,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { db } from "@/lib/db";
 import { verifySession } from "@/lib/auth/session";
 import { parseLoanLogFilters } from "@/lib/loan-filters";
+import { resolveAdminScope } from "@/lib/location-scope";
 import { groupLoanItemsForPdf } from "@/lib/inventory";
 import { RekapPeminjamanDocument } from "@/components/pdf/rekap-peminjaman";
 
@@ -29,18 +30,30 @@ export async function GET(req: Request) {
   }
 
   const url = new URL(req.url);
+  const scope = await resolveAdminScope(
+    { adminId: session.adminId, role: session.role },
+    url.searchParams.get("lokasi")
+  );
+
   const { monthFilter, peminjamFilter, barangFilter, statusFilter, where } =
-    parseLoanLogFilters({
-      bulan: url.searchParams.get("bulan") ?? undefined,
-      peminjam: url.searchParams.get("peminjam") ?? undefined,
-      barang: url.searchParams.get("barang") ?? undefined,
-      status: url.searchParams.get("status") ?? undefined,
-    });
+    parseLoanLogFilters(
+      {
+        bulan: url.searchParams.get("bulan") ?? undefined,
+        peminjam: url.searchParams.get("peminjam") ?? undefined,
+        barang: url.searchParams.get("barang") ?? undefined,
+        status: url.searchParams.get("status") ?? undefined,
+        lokasi: url.searchParams.get("lokasi") ?? undefined,
+      },
+      scope.locationId
+    );
 
   const [yStr, mStr] = monthFilter.split("-");
   const periodLabel = `${ID_MONTHS[Number(mStr) - 1]} ${yStr}`;
 
-  const filterParts: string[] = [`Bulan ${periodLabel}`];
+  const filterParts: string[] = [
+    `Lokasi ${scope.activeLocation.name}`,
+    `Bulan ${periodLabel}`,
+  ];
   if (peminjamFilter) filterParts.push(`Peminjam: ${peminjamFilter}`);
   if (barangFilter) filterParts.push(`Barang: ${barangFilter}`);
   if (statusFilter) filterParts.push(`Status: ${statusFilter}`);

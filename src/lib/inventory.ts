@@ -15,9 +15,22 @@ function toQrFilename(qrCode: string) {
   return `${qrCode.replace(/[^A-Z0-9-]/gi, "_")}.png`;
 }
 
+function toLocationCode(slug: string) {
+  return slug
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, "")
+    .slice(0, 12);
+}
+
 export async function getNextQrCodes(itemId: string, itemName: string, count: number) {
+  const item = await db.item.findUnique({
+    where: { id: itemId },
+    select: { location: { select: { slug: true } } },
+  });
+  const locCode = item?.location?.slug ? toLocationCode(item.location.slug) : "SAR";
   const itemCode = toItemCode(itemName);
-  const prefix = `SAR-${itemCode}-`;
+  const prefix = `SAR-${locCode}-${itemCode}-`;
 
   const lastUnit = await db.itemUnit.findFirst({
     where: { qrCode: { startsWith: prefix } },

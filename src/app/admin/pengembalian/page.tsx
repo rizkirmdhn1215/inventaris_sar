@@ -1,16 +1,19 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { requireAdminPageScope } from "@/lib/admin-page";
 
 type PengembalianPageProps = {
-  searchParams: Promise<{ success?: string }>;
+  searchParams: Promise<{ success?: string; lokasi?: string }>;
 };
 
 export default async function PengembalianPage({
   searchParams,
 }: PengembalianPageProps) {
   const params = await searchParams;
+  const { scope } = await requireAdminPageScope(params.lokasi);
   const loans = await db.loan.findMany({
     where: {
+      locationId: scope.locationId,
       status: {
         in: ["approved", "returned"],
       },

@@ -5,9 +5,13 @@ export type LoanLogFilters = {
   peminjam?: string;
   barang?: string;
   status?: string;
+  lokasi?: string;
 };
 
-export function parseLoanLogFilters(params: LoanLogFilters) {
+export function parseLoanLogFilters(
+  params: LoanLogFilters,
+  locationId?: string
+) {
   const now = new Date();
   const monthFilter =
     params.bulan ??
@@ -24,6 +28,7 @@ export function parseLoanLogFilters(params: LoanLogFilters) {
       : null;
 
   const where: Prisma.LoanWhereInput = {
+    ...(locationId ? { locationId } : {}),
     createdAt: { gte: filterStart, lt: filterEnd },
     ...(statusFilter ? { status: statusFilter } : {}),
     ...(peminjamFilter
@@ -55,6 +60,7 @@ export function parseLoanLogFilters(params: LoanLogFilters) {
 
 export function buildRecapQueryString(filters: LoanLogFilters) {
   const q = new URLSearchParams();
+  if (filters.lokasi) q.set("lokasi", filters.lokasi);
   if (filters.bulan) q.set("bulan", filters.bulan);
   if (filters.peminjam) q.set("peminjam", filters.peminjam);
   if (filters.barang) q.set("barang", filters.barang);

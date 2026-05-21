@@ -18,7 +18,15 @@ async function requireAdmin() {
   if (!session) throw new Error("Unauthorized");
   const admin = await db.admin.findUnique({
     where: { id: session.adminId },
-    select: { id: true, email: true, name: true, nip: true, imageUrl: true, role: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      nip: true,
+      imageUrl: true,
+      role: true,
+      locationId: true,
+    },
   });
   if (!admin) throw new Error("Admin not found");
   return { session, admin };
@@ -114,7 +122,15 @@ export async function updateProfileAction(
           ? { password: await hash(newPassword, 12) }
           : {}),
       },
-      select: { id: true, email: true, name: true, nip: true, imageUrl: true, role: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        nip: true,
+        imageUrl: true,
+        role: true,
+        locationId: true,
+      },
     });
 
     const sessionToken = await encrypt({
@@ -122,6 +138,7 @@ export async function updateProfileAction(
       email: updated.email,
       name: updated.name,
       role: updated.role,
+      ...(updated.locationId ? { locationId: updated.locationId } : {}),
     });
     await setSessionCookie(sessionToken);
 
@@ -147,6 +164,7 @@ export async function createAdminAction(
     const password = String(formData.get("password") ?? "");
     const roleRaw = String(formData.get("role") ?? "admin").trim();
     const role = roleRaw === "superadmin" ? "superadmin" : "admin";
+    const locationId = String(formData.get("locationId") ?? "").trim() || null;
 
     if (!name || !email || !password) {
       return { error: "Nama, email, dan password wajib diisi." };
@@ -160,9 +178,19 @@ export async function createAdminAction(
       return { error: "Email sudah terdaftar." };
     }
 
+    if (role === "admin" && !locationId) {
+      return { error: "Admin regional wajib ditetapkan ke lokasi." };
+    }
+
     const hashedPassword = await hash(password, 12);
     await db.admin.create({
-      data: { name, email, password: hashedPassword, role },
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role,
+        locationId: role === "superadmin" ? null : locationId,
+      },
     });
 
     revalidatePath("/admin", "layout");
@@ -187,7 +215,14 @@ export async function switchAccountAction(formData: FormData) {
 
   const admin = await db.admin.findUnique({
     where: { id: targetAdminId },
-    select: { id: true, email: true, name: true, role: true, imageUrl: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      imageUrl: true,
+      locationId: true,
+    },
   });
   if (!admin) {
     return { error: "Akun tidak ditemukan." };
@@ -198,6 +233,7 @@ export async function switchAccountAction(formData: FormData) {
     email: admin.email,
     name: admin.name,
     role: admin.role,
+    ...(admin.locationId ? { locationId: admin.locationId } : {}),
   });
 
   return {

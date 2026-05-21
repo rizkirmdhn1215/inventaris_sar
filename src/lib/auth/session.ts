@@ -10,6 +10,7 @@ export interface SessionPayload {
   email: string;
   name: string;
   role: string;
+  locationId?: string;
   purpose?: string;
 }
 
@@ -76,6 +77,7 @@ export async function verifySession() {
     email: session.email,
     name: session.name,
     role: session.role || 'admin',
+    locationId: session.locationId || null,
   };
 }
 

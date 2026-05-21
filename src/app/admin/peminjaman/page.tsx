@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { STATUS_COLOR } from "@/lib/format";
+import { requireAdminPageScope } from "@/lib/admin-page";
+import { appendLokasiQuery } from "@/lib/location-scope";
 
 type PeminjamanPageProps = {
-  searchParams: Promise<{ success?: string; error?: string; status?: string }>;
+  searchParams: Promise<{ success?: string; error?: string; status?: string; lokasi?: string }>;
 };
 
 const STATUS_TABS = [
@@ -17,13 +19,17 @@ export default async function PeminjamanPage({
   searchParams,
 }: PeminjamanPageProps) {
   const params = await searchParams;
+  const { scope } = await requireAdminPageScope(params.lokasi);
   const statusFilter =
     params.status && ["pending", "approved", "returned"].includes(params.status)
       ? params.status
       : null;
 
   const loans = await db.loan.findMany({
-    where: statusFilter ? { status: statusFilter } : undefined,
+    where: {
+      locationId: scope.locationId,
+      ...(statusFilter ? { status: statusFilter } : {}),
+    },
     include: {
       loanItems: true,
     },

@@ -9,6 +9,7 @@ import {
 
 export async function upsertItemAction(formData: FormData) {
   const id = String(formData.get("id") ?? "").trim();
+  const locationId = String(formData.get("locationId") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim() || null;
   const categoryId = String(formData.get("categoryId") ?? "").trim() || null;
@@ -24,8 +25,17 @@ export async function upsertItemAction(formData: FormData) {
       data: { name, description, categoryId, merk, type, kodeGudang },
     });
   } else {
+    if (!locationId) return;
     await db.item.create({
-      data: { name, description, categoryId, merk, type, kodeGudang },
+      data: {
+        locationId,
+        name,
+        description,
+        categoryId,
+        merk,
+        type,
+        kodeGudang,
+      },
     });
   }
   revalidatePath("/admin/barang");

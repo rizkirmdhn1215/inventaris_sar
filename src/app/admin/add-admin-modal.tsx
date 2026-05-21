@@ -8,9 +8,10 @@ import { Modal } from "@/components/modal";
 type AddAdminModalProps = {
   open: boolean;
   onClose: () => void;
+  locations?: { id: string; name: string }[];
 };
 
-export function AddAdminModal({ open, onClose }: AddAdminModalProps) {
+export function AddAdminModal({ open, onClose, locations = [] }: AddAdminModalProps) {
   const [state, formAction, pending] = useActionState<
     AccountActionState | null,
     FormData
@@ -77,8 +78,23 @@ export function AddAdminModal({ open, onClose }: AddAdminModalProps) {
             defaultValue="admin"
             className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
           >
-            <option value="admin">Admin</option>
-            <option value="superadmin">Super Admin</option>
+            <option value="admin">Admin Regional (1 lokasi)</option>
+            <option value="superadmin">Super Admin (semua lokasi)</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-zinc-400 mb-1">Lokasi (wajib untuk Admin Regional)</label>
+          <select
+            name="locationId"
+            defaultValue=""
+            className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
+          >
+            <option value="">— Pilih lokasi —</option>
+            {locations.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
           </select>
         </div>
 

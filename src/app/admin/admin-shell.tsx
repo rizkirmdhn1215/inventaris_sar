@@ -11,13 +11,19 @@ import {
   Undo2,
   Tags,
   Bell,
+  MapPin,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { appendLokasiQuery } from "@/lib/location-scope";
 import { AccountMenu } from "./account-menu";
 import { AppBrand } from "@/components/app-logo";
+import { AdminLocationBar } from "@/components/admin-location-bar";
+import { Suspense } from "react";
 
 const navItems = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/lokasi", label: "Lokasi", icon: MapPin, superOnly: true },
   { href: "/admin/kategori", label: "Kategori", icon: Tags },
   { href: "/admin/barang", label: "Barang", icon: Package },
   { href: "/admin/qr-generator", label: "QR Gen", icon: QrCode },
@@ -34,6 +40,9 @@ export function AdminShell({
   adminNip,
   adminRole,
   vapidPublicKey,
+  isSuperAdmin,
+  activeLocation,
+  locations,
 }: {
   children: ReactNode;
   adminId: string;
@@ -43,8 +52,19 @@ export function AdminShell({
   adminNip: string | null;
   adminRole: string;
   vapidPublicKey: string;
+  isSuperAdmin: boolean;
+  activeLocation: { slug: string; name: string; type: string };
+  locations: { id: string; slug: string; name: string; type: string }[];
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  function linkWithLokasi(path: string) {
+    if (!isSuperAdmin || path === "/admin/lokasi") return path;
+    const slug = searchParams.get("lokasi") || activeLocation.slug;
+    return appendLokasiQuery(path, slug);
+  }
+
   const [pushState, setPushState] = useState<
     "idle" | "subscribed" | "denied" | "unsupported" | "loading"
   >("idle");
@@ -94,7 +114,7 @@ export function AdminShell({
         <AppBrand
           size="sm"
           href="/admin/dashboard"
-          subtitle="Panel Admin · Inventaris"
+          subtitle={`Panel Admin · ${activeLocation.name}`}
         />
 
         <div className="flex items-center gap-2 sm:gap-3">
@@ -128,6 +148,7 @@ export function AdminShell({
             adminImageUrl={adminImageUrl}
             adminNip={adminNip}
             adminRole={adminRole}
+            locations={locations.map((l) => ({ id: l.id, name: l.name }))}
           />
         </div>
       </header>
@@ -136,12 +157,13 @@ export function AdminShell({
         <aside className="hidden md:flex w-56 flex-col border-r border-zinc-800 bg-zinc-950/80">
           <nav className="flex-1 py-4 space-y-1 px-2">
             {navItems.map((item) => {
+              if ("superOnly" in item && item.superOnly && !isSuperAdmin) return null;
               const Icon = item.icon;
               const isActive = pathname.startsWith(item.href);
               return (
                 <Link
                   key={item.href}
-                  href={item.href}
+                  href={linkWithLokasi(item.href)}
                   className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
                     isActive
                       ? "bg-zinc-900 text-white"
@@ -158,6 +180,14 @@ export function AdminShell({
 
         <main className="flex-1 flex flex-col min-w-0 relative z-0">
           <div className="flex-1 px-4 sm:px-6 py-4 sm:py-6 pb-20 md:pb-6">
+            <Suspense fallback={null}>
+              <AdminLocationBar
+                isSuperAdmin={isSuperAdmin}
+                activeLocation={activeLocation}
+                locations={locations}
+                fixedForRegional={!isSuperAdmin}
+              />
+            </Suspense>
             {children}
           </div>
 

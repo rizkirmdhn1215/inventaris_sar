@@ -8,7 +8,15 @@ import { AppBrand } from "@/components/app-logo";
 type Category = { id: string; name: string };
 type QrRenderMap = Record<string, string>;
 
-export function QrGeneratorClient({ categories }: { categories: Category[] }) {
+export function QrGeneratorClient({
+  locationId,
+  locationName,
+  categories,
+}: {
+  locationId: string;
+  locationName: string;
+  categories: Category[];
+}) {
   const [state, formAction, pending] = useActionState(generateQrAction, null);
   const [images, setImages] = useState<QrRenderMap>({});
   const [rows, setRows] = useState([{ id: 1 }]);
@@ -35,7 +43,7 @@ export function QrGeneratorClient({ categories }: { categories: Category[] }) {
       <AppBrand
         size="md"
         title="QR Generator"
-        subtitle="Minang Rescue · KPP Padang"
+        subtitle={`Minang Rescue · ${locationName}`}
       />
       <p className="text-sm text-zinc-400 -mt-2">
         Isi per baris: nama barang, kategori, jumlah unit.
@@ -43,6 +51,7 @@ export function QrGeneratorClient({ categories }: { categories: Category[] }) {
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 sm:p-6 print:hidden">
         <form action={formAction} className="space-y-4">
+          <input type="hidden" name="locationId" value={locationId} />
           <div className="space-y-3">
             {rows.map((row, index) => (
               <div

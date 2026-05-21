@@ -43,6 +43,11 @@ export async function generateQrAction(
   const rawCategoryIds = formData
     .getAll("categoryId")
     .map((v) => String(v).trim());
+  const locationId = String(formData.get("locationId") ?? "").trim();
+
+  if (!locationId) {
+    return { error: "Lokasi tidak valid." };
+  }
 
   if (rawNames.length === 0) {
     return { error: "Minimal isi 1 nama barang." };
@@ -73,11 +78,28 @@ export async function generateQrAction(
   const generated: QrResultItem[] = [];
   const qrBucketName = process.env.MINIO_BUCKET_QRS || "item-qrs";
 
+  const location = await db.location.findUnique({
+    where: { id: locationId },
+    select: { slug: true },
+  });
+  if (!location) return { error: "Lokasi tidak ditemukan." };
+
+  const locCode = location.slug
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, "")
+    .slice(0, 12);
+
   for (const { itemName, quantity, categoryId } of entries) {
-    let item = await db.item.findFirst({ where: { name: itemName } });
+    let item = await db.item.findFirst({
+      where: { name: itemName, locationId },
+    });
     if (!item) {
       item = await db.item.create({
-        data: { name: itemName, categoryId: categoryId ?? null },
+        data: {
+          locationId,
+          name: itemName,
+          categoryId: categoryId ?? null,
+        },
       });
     } else if (categoryId && item.categoryId !== categoryId) {
       item = await db.item.update({
@@ -87,7 +109,7 @@ export async function generateQrAction(
     }
 
     const itemCode = toItemCode(itemName);
-    const prefix = `SAR-${itemCode}-`;
+    const prefix = `SAR-${locCode}-${itemCode}-`;
 
     const lastUnit = await db.itemUnit.findFirst({
       where: { qrCode: { startsWith: prefix } },

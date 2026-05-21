@@ -14,8 +14,12 @@ import { PinjamForm } from "./pinjam/pinjam-form";
 import { AppBrand, AppLogo } from "@/components/app-logo";
 import type { InternalBorrowerOption } from "@/components/internal-borrower-field";
 import type { BorrowCatalogItem, ScanUnitOption } from "@/lib/borrow-catalog";
+import { LocationPicker } from "@/components/location-picker";
+import type { PublicLocation } from "@/lib/locations";
 
 type LandingClientProps = {
+  locations: PublicLocation[];
+  selectedLocation: PublicLocation | null;
   catalog: BorrowCatalogItem[];
   scanUnits: ScanUnitOption[];
   internalBorrowers: InternalBorrowerOption[];
@@ -27,6 +31,8 @@ type LandingClientProps = {
 type Mode = "none" | "pinjam" | "external";
 
 export function LandingClient({
+  locations,
+  selectedLocation,
   catalog,
   scanUnits,
   internalBorrowers,
@@ -45,7 +51,11 @@ export function LandingClient({
           <AppBrand
             size="md"
             onClick={() => setMode("none")}
-            subtitle="Inventaris Barang · KPP Padang"
+            subtitle={
+              selectedLocation
+                ? `Inventaris · ${selectedLocation.name}`
+                : "Inventaris Barang · Pilih Lokasi"
+            }
           />
 
           <Link
@@ -67,17 +77,41 @@ export function LandingClient({
               Sistem Manajemen Peminjaman
             </h1>
             <p className="text-sm sm:text-base text-zinc-400 max-w-xl mx-auto">
-              Kelola peminjaman & pengembalian barang operasional Kantor SAR
-              Padang. Pilih layanan di bawah ini.
+              Pilih lokasi gudang (KPP Padang, Pos SAR daerah lain), lalu ajukan
+              peminjaman barang operasional.
             </p>
           </section>
         ) : null}
 
+        {mode === "none" ? (
+          <section className="space-y-3">
+            <h2 className="text-sm font-medium text-zinc-300">Pilih Lokasi Gudang</h2>
+            <LocationPicker
+              locations={locations}
+              selectedSlug={selectedLocation?.slug ?? null}
+            />
+          </section>
+        ) : null}
+
+        {selectedLocation && mode === "none" ? (
+          <p className="text-center text-xs text-emerald-400/90">
+            Lokasi aktif: <strong>{selectedLocation.name}</strong> — pilih layanan di bawah.
+          </p>
+        ) : null}
+
+        {!selectedLocation && mode !== "none" ? (
+          <p className="text-sm text-amber-300 bg-amber-950/30 border border-amber-900/40 rounded-lg px-3 py-2 text-center">
+            Pilih lokasi gudang terlebih dahulu di beranda.
+          </p>
+        ) : null}
+
         <div
           className={`grid gap-3 transition-all ${
-            mode === "none"
-              ? "grid-cols-1 md:grid-cols-2"
-              : "grid-cols-2"
+            !selectedLocation
+              ? "hidden"
+              : mode === "none"
+                ? "grid-cols-1 md:grid-cols-2"
+                : "grid-cols-2"
           }`}
         >
           <ServiceCard
@@ -118,9 +152,11 @@ export function LandingClient({
           </div>
         ) : null}
 
-        {mode === "pinjam" ? (
+        {mode === "pinjam" && selectedLocation ? (
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3 sm:p-6">
             <PinjamForm
+              locationId={selectedLocation.id}
+              locationName={selectedLocation.name}
               catalog={catalog}
               scanUnits={scanUnits}
               internalBorrowers={internalBorrowers}
@@ -130,10 +166,12 @@ export function LandingClient({
           </section>
         ) : null}
 
-        {mode === "external" ? (
+        {mode === "external" && selectedLocation ? (
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3 sm:p-6">
             <PinjamForm
               external
+              locationId={selectedLocation.id}
+              locationName={selectedLocation.name}
               catalog={catalog}
               scanUnits={scanUnits}
               successRef={successRef}

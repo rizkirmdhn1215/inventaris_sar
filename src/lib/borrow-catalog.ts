@@ -8,8 +8,9 @@ export type BorrowCatalogItem = {
   availableCount: number;
 };
 
-export async function getBorrowCatalog(): Promise<BorrowCatalogItem[]> {
+export async function getBorrowCatalog(locationId: string): Promise<BorrowCatalogItem[]> {
   const items = await db.item.findMany({
+    where: { locationId },
     include: {
       category: true,
       units: {
@@ -38,9 +39,13 @@ export type ScanUnitOption = {
   itemName: string;
 };
 
-export async function getScannableUnits(): Promise<ScanUnitOption[]> {
+export async function getScannableUnits(locationId: string): Promise<ScanUnitOption[]> {
   const units = await db.itemUnit.findMany({
-    where: { status: "available", condition: "good" },
+    where: {
+      status: "available",
+      condition: "good",
+      item: { locationId },
+    },
     include: { item: true },
     orderBy: { qrCode: "asc" },
     take: 500,

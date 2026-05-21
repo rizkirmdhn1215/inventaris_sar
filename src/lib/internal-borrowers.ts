@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
 
-export async function listInternalBorrowers() {
+export async function listInternalBorrowers(locationId: string) {
   return db.internalBorrower.findMany({
+    where: { locationId },
     orderBy: [{ lastUsedAt: "desc" }, { usageCount: "desc" }, { name: "asc" }],
     select: {
       id: true,
@@ -22,6 +23,7 @@ export function parseDdMmYyyy(value: string): Date | null {
 }
 
 export async function rememberInternalBorrower(input: {
+  locationId: string;
   borrowerId?: string | null;
   name: string;
   division: string;
@@ -34,7 +36,7 @@ export async function rememberInternalBorrower(input: {
 
   if (input.borrowerId) {
     const updated = await db.internalBorrower.updateMany({
-      where: { id: input.borrowerId },
+      where: { id: input.borrowerId, locationId: input.locationId },
       data: {
         name,
         jabatan,
@@ -46,7 +48,10 @@ export async function rememberInternalBorrower(input: {
   }
 
   const existing = await db.internalBorrower.findFirst({
-    where: { name: { equals: name, mode: "insensitive" } },
+    where: {
+      locationId: input.locationId,
+      name: { equals: name, mode: "insensitive" },
+    },
     select: { id: true },
   });
 
@@ -63,6 +68,6 @@ export async function rememberInternalBorrower(input: {
   }
 
   await db.internalBorrower.create({
-    data: { name, jabatan },
+    data: { locationId: input.locationId, name, jabatan },
   });
 }

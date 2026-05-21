@@ -5,11 +5,14 @@ import { upsertItemAction } from "./actions";
 import { STATUS_COLOR } from "@/lib/format";
 import { QrViewerButton } from "./qr-viewer";
 import { EditableItemRow } from "./editable-row";
+import { requireAdminPageScope } from "@/lib/admin-page";
+import { appendLokasiQuery } from "@/lib/location-scope";
 
 type BarangPageProps = {
   searchParams: Promise<{
     status?: string;
     tab?: string;
+    lokasi?: string;
     q?: string;
     merk?: string;
     category?: string;
@@ -18,6 +21,8 @@ type BarangPageProps = {
 
 export default async function BarangPage({ searchParams }: BarangPageProps) {
   const params = await searchParams;
+  const { scope } = await requireAdminPageScope(params.lokasi);
+  const locId = scope.locationId;
   const tab = params.tab === "master" ? "master" : "units";
   const activeStatus =
     params.status === "borrowed"
@@ -34,10 +39,11 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
 
   const unitsWhere =
     activeStatus === "damaged"
-      ? { condition: { in: ["damaged", "lost"] } }
-      : { status: activeStatus };
+      ? { condition: { in: ["damaged", "lost"] }, item: { locationId: locId } }
+      : { status: activeStatus, item: { locationId: locId } };
 
   const masterWhere = {
+    locationId: locId,
     ...(searchQ
       ? {
           OR: [
@@ -62,10 +68,12 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
     items,
     categories,
   ] = await Promise.all([
-    db.itemUnit.count({ where: { status: "available" } }),
-    db.itemUnit.count({ where: { status: "borrowed" } }),
-    db.itemUnit.count({ where: { condition: { in: ["damaged", "lost"] } } }),
-    db.itemUnit.count({ where: { status: "maintenance" } }),
+    db.itemUnit.count({ where: { status: "available", item: { locationId: locId } } }),
+    db.itemUnit.count({ where: { status: "borrowed", item: { locationId: locId } } }),
+    db.itemUnit.count({
+      where: { condition: { in: ["damaged", "lost"] }, item: { locationId: locId } },
+    }),
+    db.itemUnit.count({ where: { status: "maintenance", item: { locationId: locId } } }),
     db.itemUnit.findMany({
       where: unitsWhere,
       include: { item: { include: { category: true } } },
@@ -80,16 +88,22 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
       },
       orderBy: { name: "asc" },
     }),
-    db.itemCategory.findMany({ orderBy: { name: "asc" } }),
+    db.itemCategory.findMany({
+      where: { locationId: locId },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   const masterFilterQs = (extra: Record<string, string>) => {
-    const q = new URLSearchParams({ tab: "master", ...extra });
+    const q = new URLSearchParams({ tab: "master", lokasi: scope.activeLocation.slug, ...extra });
     if (searchQ) q.set("q", searchQ);
     if (searchMerk) q.set("merk", searchMerk);
     if (searchCategory) q.set("category", searchCategory);
     return q.toString();
   };
+
+  const unitsTabHref = (status: string) =>
+    appendLokasiQuery(`/admin/barang?tab=units&status=${status}`, scope.activeLocation.slug);
 
   return (
     <div className="space-y-6">
@@ -102,7 +116,7 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
 
       <div className="flex gap-2 border-b border-zinc-800">
         <Link
-          href="/admin/barang?tab=units&status=available"
+          href={unitsTabHref("available")}
           className={`px-4 py-2 text-sm border-b-2 ${
             tab === "units" ? "border-orange-500 text-white" : "border-transparent text-zinc-400"
           }`}
@@ -158,7 +172,7 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
                 Cari
               </button>
               <Link
-                href="/admin/barang?tab=master"
+                href={`/admin/barang?${masterFilterQs({ tab: "master" })}`}
                 className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200"
               >
                 Reset
@@ -170,6 +184,7 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
             action={upsertItemAction}
             className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 grid grid-cols-1 md:grid-cols-12 gap-2"
           >
+            <input type="hidden" name="locationId" value={locId} />
             <input
               name="name"
               required
@@ -276,7 +291,7 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Link
-              href="/admin/barang?tab=units&status=available"
+              href={unitsTabHref("available")}
               className={`rounded-xl border px-4 py-3 flex items-center justify-between ${
                 activeStatus === "available"
                   ? "border-orange-500/50 bg-orange-500/10"
@@ -292,7 +307,7 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
               </span>
             </Link>
             <Link
-              href="/admin/barang?tab=units&status=borrowed"
+              href={unitsTabHref("borrowed")}
               className={`rounded-xl border px-4 py-3 flex items-center justify-between ${
                 activeStatus === "borrowed"
                   ? "border-orange-500/50 bg-orange-500/10"
@@ -308,7 +323,7 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
               </span>
             </Link>
             <Link
-              href="/admin/barang?tab=units&status=maintenance"
+              href={unitsTabHref("maintenance")}
               className={`rounded-xl border px-4 py-3 flex items-center justify-between ${
                 activeStatus === "maintenance"
                   ? "border-violet-500/50 bg-violet-500/10"
@@ -324,7 +339,7 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
               </span>
             </Link>
             <Link
-              href="/admin/barang?tab=units&status=damaged"
+              href={unitsTabHref("damaged")}
               className={`rounded-xl border px-4 py-3 flex items-center justify-between ${
                 activeStatus === "damaged"
                   ? "border-orange-500/50 bg-orange-500/10"

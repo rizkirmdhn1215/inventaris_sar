@@ -24,6 +24,14 @@ export async function loginAction(
   try {
     const admin = await db.admin.findUnique({
       where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        password: true,
+        role: true,
+        locationId: true,
+      },
     });
 
     if (!admin) {
@@ -36,11 +44,19 @@ export async function loginAction(
       return { error: 'Email atau password salah.', email };
     }
 
+    if (admin.role === "admin" && !admin.locationId) {
+      return {
+        error: "Akun admin belum ditetapkan ke lokasi. Hubungi Super Admin.",
+        email,
+      };
+    }
+
     await createSession({
       sub: admin.id,
       email: admin.email,
       name: admin.name,
-      role: admin.role ?? 'admin',
+      role: admin.role ?? "admin",
+      ...(admin.locationId ? { locationId: admin.locationId } : {}),
     });
 
   } catch (error) {

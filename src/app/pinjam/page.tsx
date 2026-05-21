@@ -1,19 +1,26 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { listInternalBorrowers } from "@/lib/internal-borrowers";
 import { getBorrowCatalog, getScannableUnits } from "@/lib/borrow-catalog";
+import { getLocationBySlug } from "@/lib/location-scope";
 import { PinjamForm } from "./pinjam-form";
 import { AppBrand } from "@/components/app-logo";
 
 type PinjamPageProps = {
-  searchParams: Promise<{ success?: string; error?: string }>;
+  searchParams: Promise<{ success?: string; error?: string; lokasi?: string }>;
 };
 
 export default async function PinjamPage({ searchParams }: PinjamPageProps) {
   const params = await searchParams;
+  if (!params.lokasi) redirect("/?error=Pilih%20lokasi%20gudang");
+
+  const location = await getLocationBySlug(params.lokasi);
+  if (!location) redirect("/?error=Lokasi%20tidak%20ditemukan");
+
   const [catalog, scanUnits, internalBorrowers] = await Promise.all([
-    getBorrowCatalog(),
-    getScannableUnits(),
-    listInternalBorrowers(),
+    getBorrowCatalog(location.id),
+    getScannableUnits(location.id),
+    listInternalBorrowers(location.id),
   ]);
 
   return (
@@ -22,9 +29,9 @@ export default async function PinjamPage({ searchParams }: PinjamPageProps) {
         <div className="flex items-center justify-between gap-2">
           <AppBrand
             size="md"
-            href="/"
+            href={`/?lokasi=${location.slug}`}
             title="Peminjaman Barang"
-            subtitle="Minang Rescue · KPP Padang"
+            subtitle={location.name}
           />
           <Link href="/" className="text-xs text-zinc-400 hover:text-white shrink-0">
             Beranda
@@ -32,9 +39,11 @@ export default async function PinjamPage({ searchParams }: PinjamPageProps) {
         </div>
       </div>
       <PinjamForm
+        locationId={location.id}
+        locationName={location.name}
+        internalBorrowers={internalBorrowers}
         catalog={catalog}
         scanUnits={scanUnits}
-        internalBorrowers={internalBorrowers}
         successRef={params.success}
         errorMessage={params.error}
       />
