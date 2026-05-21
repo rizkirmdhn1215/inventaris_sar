@@ -24,6 +24,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
+  if (unit.status === "retired") {
+    return NextResponse.json(
+      { error: "Unit ini sudah tidak aktif (dikurangi dari inventaris)." },
+      { status: 410 }
+    );
+  }
+
   const activeLoan = unit.loanItems[0]?.loan ?? null;
 
   return NextResponse.json({

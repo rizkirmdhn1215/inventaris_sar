@@ -20,6 +20,7 @@ export default async function QrGeneratorPage({ searchParams }: QrPageProps) {
     include: {
       category: { select: { name: true } },
       units: {
+        where: { status: { not: "retired" } },
         orderBy: { qrCode: "asc" },
         select: { id: true, qrCode: true, status: true },
       },

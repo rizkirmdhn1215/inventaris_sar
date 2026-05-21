@@ -84,7 +84,10 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
       where: masterWhere,
       include: {
         category: true,
-        units: { select: { id: true, status: true } },
+        units: {
+          where: { status: { not: "retired" } },
+          select: { id: true, status: true },
+        },
       },
       orderBy: { name: "asc" },
     }),

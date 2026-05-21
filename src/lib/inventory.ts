@@ -1,6 +1,9 @@
 import { db } from "@/lib/db";
 
-export type UnitStatus = "available" | "borrowed" | "maintenance";
+export type UnitStatus = "available" | "borrowed" | "maintenance" | "retired";
+
+/** Units counted in master inventory (excludes retired; history preserved in DB). */
+export const activeUnitWhere = { status: { not: "retired" as const } };
 
 export function toItemCode(name: string) {
   return name
@@ -48,7 +51,9 @@ export async function getNextQrCodes(itemId: string, itemName: string, count: nu
   });
 }
 
-/** Create or remove available units so total unit count matches target. */
+/**
+ * Set active unit count (retired units are excluded from total but kept for loan history).
+ */
 export async function adjustItemUnitCount(itemId: string, targetCount: number) {
   if (!Number.isInteger(targetCount) || targetCount < 0 || targetCount > 500) {
     throw new Error("Jumlah unit harus antara 0 dan 500.");
@@ -56,11 +61,16 @@ export async function adjustItemUnitCount(itemId: string, targetCount: number) {
 
   const item = await db.item.findUnique({
     where: { id: itemId },
-    include: { units: { select: { id: true, status: true } } },
+    select: { id: true, name: true },
   });
   if (!item) throw new Error("Barang tidak ditemukan.");
 
-  const current = item.units.length;
+  const units = await db.itemUnit.findMany({
+    where: { itemId, ...activeUnitWhere },
+    select: { id: true, status: true, createdAt: true },
+  });
+
+  const current = units.length;
   if (targetCount === current) return;
 
   if (targetCount > current) {
@@ -77,33 +87,30 @@ export async function adjustItemUnitCount(itemId: string, targetCount: number) {
   }
 
   const needRemove = current - targetCount;
+  const borrowedCount = units.filter((u) => u.status === "borrowed").length;
+  const removableSlots = current - borrowedCount;
 
-  // Only units never used in loans/returns can be hard-deleted (FK on loan_items, condition_reports).
-  const deletable = await db.itemUnit.findMany({
-    where: {
-      itemId,
-      status: { in: ["available", "maintenance"] },
-      loanItems: { none: {} },
-      conditionReports: { none: {} },
-    },
-    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-    take: needRemove,
-    select: { id: true },
-  });
-
-  if (deletable.length < needRemove) {
-    const available = item.units.filter((u) => u.status === "available").length;
-    const maintenance = item.units.filter((u) => u.status === "maintenance").length;
-    const borrowed = item.units.filter((u) => u.status === "borrowed").length;
+  if (needRemove > removableSlots) {
     throw new Error(
-      `Tidak bisa mengurangi ${needRemove} unit. Hanya ${deletable.length} unit bisa dihapus ` +
-        `(belum pernah dipinjam). ${available} tersedia, ${maintenance} maintenance, ${borrowed} dipinjam — ` +
-        `unit yang pernah dipinjam tidak bisa dihapus karena riwayat peminjaman.`
+      `Tidak bisa mengurangi ${needRemove} unit. ${borrowedCount} unit masih dipinjam — ` +
+        `kembalikan dulu, lalu kurangi jumlah unit.`
     );
   }
 
-  await db.itemUnit.deleteMany({
-    where: { id: { in: deletable.map((u) => u.id) } },
+  const statusOrder: Record<string, number> = { available: 0, maintenance: 1 };
+  const toRetire = units
+    .filter((u) => u.status !== "borrowed")
+    .sort((a, b) => {
+      const oa = statusOrder[a.status] ?? 2;
+      const ob = statusOrder[b.status] ?? 2;
+      if (oa !== ob) return oa - ob;
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    })
+    .slice(0, needRemove);
+
+  await db.itemUnit.updateMany({
+    where: { id: { in: toRetire.map((u) => u.id) } },
+    data: { status: "retired" },
   });
 }
 
@@ -114,7 +121,7 @@ export async function adjustItemMaintenanceCount(itemId: string, targetMaintenan
   }
 
   const units = await db.itemUnit.findMany({
-    where: { itemId },
+    where: { itemId, ...activeUnitWhere },
     select: { id: true, status: true },
   });
 
