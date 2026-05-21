@@ -65,6 +65,13 @@ export async function adjustUnitCountAction(
     revalidatePath("/admin/barang");
     return { success: "Jumlah unit diperbarui." };
   } catch (e) {
+    const code = (e as { code?: string })?.code;
+    if (code === "P2003") {
+      return {
+        error:
+          "Unit tidak bisa dihapus karena masih terkait riwayat peminjaman. Kurangi hanya unit yang belum pernah dipinjam.",
+      };
+    }
     return { error: (e as Error).message };
   }
 }

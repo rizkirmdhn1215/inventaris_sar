@@ -36,8 +36,6 @@ async function main() {
 
   const admins = [
     { email: 'admin@sarpadang.go.id', name: 'Super Admin', role: 'superadmin', locationId: null as string | null },
-    { email: 'ryan@sarpadang.go.id', name: 'RYAN AGUS SYAPUTRA', role: 'admin', locationId: KPP_PADANG_ID },
-    { email: 'hari@sarpadang.go.id', name: 'HARI AGUSTIAN, S.A.P.', role: 'admin', locationId: KPP_PADANG_ID },
   ];
 
   for (const a of admins) {

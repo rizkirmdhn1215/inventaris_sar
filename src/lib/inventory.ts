@@ -76,16 +76,35 @@ export async function adjustItemUnitCount(itemId: string, targetCount: number) {
     return;
   }
 
-  const removable = item.units.filter((u) => u.status === "available");
   const needRemove = current - targetCount;
-  if (removable.length < needRemove) {
+
+  // Only units never used in loans/returns can be hard-deleted (FK on loan_items, condition_reports).
+  const deletable = await db.itemUnit.findMany({
+    where: {
+      itemId,
+      status: { in: ["available", "maintenance"] },
+      loanItems: { none: {} },
+      conditionReports: { none: {} },
+    },
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    take: needRemove,
+    select: { id: true },
+  });
+
+  if (deletable.length < needRemove) {
+    const available = item.units.filter((u) => u.status === "available").length;
+    const maintenance = item.units.filter((u) => u.status === "maintenance").length;
+    const borrowed = item.units.filter((u) => u.status === "borrowed").length;
     throw new Error(
-      `Tidak bisa mengurangi ${needRemove} unit. Hanya ${removable.length} unit tersedia yang bisa dihapus (sisanya dipinjam atau maintenance).`
+      `Tidak bisa mengurangi ${needRemove} unit. Hanya ${deletable.length} unit bisa dihapus ` +
+        `(belum pernah dipinjam). ${available} tersedia, ${maintenance} maintenance, ${borrowed} dipinjam — ` +
+        `unit yang pernah dipinjam tidak bisa dihapus karena riwayat peminjaman.`
     );
   }
 
-  const idsToDelete = removable.slice(0, needRemove).map((u) => u.id);
-  await db.itemUnit.deleteMany({ where: { id: { in: idsToDelete } } });
+  await db.itemUnit.deleteMany({
+    where: { id: { in: deletable.map((u) => u.id) } },
+  });
 }
 
 /** Set how many units are in maintenance; adjusts available ↔ maintenance only. */
