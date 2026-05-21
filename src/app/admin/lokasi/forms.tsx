@@ -6,6 +6,7 @@ import {
   createRegionalAdminAction,
   type LokasiActionState,
 } from "./actions";
+import { PasswordInput } from "@/components/password-input";
 
 export function CreateLocationForm() {
   const [state, action, pending] = useActionState<LokasiActionState | null, FormData>(
@@ -102,13 +103,12 @@ export function CreateRegionalAdminForm({
         placeholder="Email login"
         className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
       />
-      <input
+      <PasswordInput
         name="password"
-        type="password"
         required
         minLength={8}
         placeholder="Password awal"
-        className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
+        inputClassName="w-full rounded-lg bg-zinc-950 border border-zinc-800 py-2 text-sm text-white"
       />
       <button
         type="submit"

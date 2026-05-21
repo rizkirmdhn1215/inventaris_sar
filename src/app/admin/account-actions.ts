@@ -35,6 +35,9 @@ async function requireAdmin() {
 export type AccountActionState = {
   error?: string;
   success?: string;
+  name?: string;
+  nip?: string | null;
+  imageUrl?: string | null;
 };
 
 export async function updateProfileAction(
@@ -143,7 +146,12 @@ export async function updateProfileAction(
     await setSessionCookie(sessionToken);
 
     revalidatePath("/admin", "layout");
-    return { success: "Profil berhasil diperbarui." };
+    return {
+      success: "Profil berhasil diperbarui.",
+      name: updated.name,
+      nip: updated.nip,
+      imageUrl: updated.imageUrl,
+    };
   } catch {
     return { error: "Gagal memperbarui profil." };
   }

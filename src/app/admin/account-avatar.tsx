@@ -25,11 +25,17 @@ export function AccountAvatar({
   const dim = sizeClass[size];
 
   if (imageUrl) {
+    const isLocalPreview = imageUrl.startsWith("blob:") || imageUrl.startsWith("data:");
     return (
       <div
         className={`${dim} rounded-full overflow-hidden relative shrink-0 bg-zinc-800 ${className}`}
       >
-        <Image src={imageUrl} alt={name} fill className="object-cover" unoptimized />
+        {isLocalPreview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={imageUrl} alt={name} className="w-full h-full object-cover" />
+        ) : (
+          <Image src={imageUrl} alt={name} fill className="object-cover" unoptimized />
+        )}
       </div>
     );
   }

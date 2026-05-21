@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { loginAction, type LoginActionState } from "./actions";
 import { KeyRound, Loader2, ArrowRight } from "lucide-react";
+import { PasswordInput } from "@/components/password-input";
 
 export function LoginForm() {
   const searchParams = useSearchParams();
@@ -48,16 +49,13 @@ export function LoginForm() {
 
         <div>
           <label className="block text-sm font-medium text-zinc-300">Password</label>
-          <div className="mt-2 relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <KeyRound className="h-5 w-5 text-zinc-600" />
-            </div>
-            <input
+          <div className="mt-2">
+            <PasswordInput
               name="password"
-              type="password"
               required
               placeholder="••••••••"
-              className="block w-full rounded-xl border-0 py-2.5 pl-10 pr-4 text-white bg-zinc-950/50 shadow-inner ring-1 ring-inset ring-zinc-800 placeholder:text-zinc-600 focus:ring-2 focus:ring-inset focus:ring-orange-500 sm:text-sm sm:leading-6 transition-all"
+              leftIcon={<KeyRound className="h-5 w-5 text-zinc-600" />}
+              inputClassName="block w-full rounded-xl border-0 py-2.5 text-white bg-zinc-950/50 shadow-inner ring-1 ring-inset ring-zinc-800 placeholder:text-zinc-600 focus:ring-2 focus:ring-inset focus:ring-orange-500 sm:text-sm sm:leading-6 transition-all"
             />
           </div>
         </div>

@@ -11,6 +11,7 @@ import {
   Users,
   Check,
   Loader2,
+  Camera,
 } from "lucide-react";
 import { AccountAvatar } from "./account-avatar";
 import { EditAccountModal } from "./edit-account-modal";
@@ -175,6 +176,16 @@ export function AccountMenu({
             </div>
 
             <div className="py-1">
+              {!imageUrl ? (
+                <MenuButton
+                  icon={<Camera className="w-4 h-4" />}
+                  label="Tambah foto profil"
+                  onClick={() => {
+                    setOpen(false);
+                    setEditOpen(true);
+                  }}
+                />
+              ) : null}
               <MenuButton
                 icon={<Pencil className="w-4 h-4" />}
                 label="Edit akun"

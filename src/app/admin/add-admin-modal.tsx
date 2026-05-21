@@ -4,6 +4,7 @@ import { useActionState, useEffect } from "react";
 import { Loader2, UserPlus } from "lucide-react";
 import { createAdminAction, type AccountActionState } from "./account-actions";
 import { Modal } from "@/components/modal";
+import { PasswordInput } from "@/components/password-input";
 
 type AddAdminModalProps = {
   open: boolean;
@@ -62,13 +63,12 @@ export function AddAdminModal({ open, onClose, locations = [] }: AddAdminModalPr
         </div>
         <div>
           <label className="block text-xs text-zinc-400 mb-1">Password awal</label>
-          <input
+          <PasswordInput
             name="password"
-            type="password"
             required
             minLength={8}
             placeholder="Min. 8 karakter"
-            className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
+            inputClassName="w-full rounded-lg bg-zinc-950 border border-zinc-800 py-2 text-sm text-white"
           />
         </div>
         <div>
