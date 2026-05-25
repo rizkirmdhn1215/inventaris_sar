@@ -4,6 +4,7 @@ import { verifySession } from "@/lib/auth/session";
 import { getAllLocationStats } from "@/lib/location-scope";
 import { locationTypeLabel } from "@/lib/locations";
 import { CreateLocationForm, CreateRegionalAdminForm } from "./forms";
+import { LocationRowActions, AdminRowActions } from "./manage-rows";
 import { MapPin, Users } from "lucide-react";
 
 export default async function LokasiAdminPage() {
@@ -23,7 +24,14 @@ export default async function LokasiAdminPage() {
     getAllLocationStats(),
     db.admin.findMany({
       where: { role: "admin", locationId: { not: null } },
-      include: { location: { select: { name: true, slug: true } } },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        nip: true,
+        locationId: true,
+        location: { select: { name: true, slug: true } },
+      },
       orderBy: { name: "asc" },
     }),
   ]);
@@ -70,6 +78,7 @@ export default async function LokasiAdminPage() {
                 <th className="px-4 py-2 text-left text-xs text-zinc-400">Pending</th>
                 <th className="px-4 py-2 text-left text-xs text-zinc-400">Status</th>
                 <th className="px-4 py-2 text-left text-xs text-zinc-400">Panel</th>
+                <th className="px-4 py-2 text-left text-xs text-zinc-400">Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -98,6 +107,18 @@ export default async function LokasiAdminPage() {
                         Buka panel →
                       </a>
                     </td>
+                    <td className="px-4 py-2">
+                      <LocationRowActions
+                        location={{
+                          id: loc.id,
+                          slug: loc.slug,
+                          name: loc.name,
+                          type: loc.type,
+                          description: loc.description,
+                          isActive: loc.isActive,
+                        }}
+                      />
+                    </td>
                   </tr>
                 );
               })}
@@ -120,6 +141,7 @@ export default async function LokasiAdminPage() {
                 <th className="px-4 py-2 text-left text-xs text-zinc-400">Nama</th>
                 <th className="px-4 py-2 text-left text-xs text-zinc-400">Email</th>
                 <th className="px-4 py-2 text-left text-xs text-zinc-400">Lokasi</th>
+                <th className="px-4 py-2 text-left text-xs text-zinc-400">Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -130,11 +152,23 @@ export default async function LokasiAdminPage() {
                   <td className="px-4 py-2 text-zinc-300">
                     {a.location?.name ?? "-"}
                   </td>
+                  <td className="px-4 py-2">
+                    <AdminRowActions
+                      admin={{
+                        id: a.id,
+                        name: a.name,
+                        email: a.email,
+                        nip: a.nip,
+                        locationId: a.locationId,
+                      }}
+                      locations={locations.map((l) => ({ id: l.id, name: l.name }))}
+                    />
+                  </td>
                 </tr>
               ))}
               {admins.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-zinc-500">
+                  <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">
                     Belum ada admin regional. Tambahkan via form di atas.
                   </td>
                 </tr>

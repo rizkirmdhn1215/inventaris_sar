@@ -6,6 +6,9 @@ import { verifySession } from "@/lib/auth/session";
 import { hash } from "bcryptjs";
 import { copyInternalBorrowersToLocation } from "@/lib/internal-borrowers";
 
+/** KPP Padang — canonical site; must not be deleted. */
+export const PROTECTED_LOCATION_ID = "00000000-0000-4000-8000-000000000001";
+
 function slugify(name: string) {
   return name
     .toLowerCase()
@@ -71,25 +74,89 @@ export async function createLocationAction(
   }
 }
 
-export async function updateLocationAction(formData: FormData): Promise<LokasiActionState> {
+export async function updateLocationAction(
+  _prev: LokasiActionState | null,
+  formData: FormData
+): Promise<LokasiActionState> {
   try {
     await requireSuperAdmin();
     const id = String(formData.get("id") ?? "").trim();
     const name = String(formData.get("name") ?? "").trim();
+    const slugRaw = String(formData.get("slug") ?? "").trim();
     const type = String(formData.get("type") ?? "pos").trim() === "kpp" ? "kpp" : "pos";
     const description = String(formData.get("description") ?? "").trim() || null;
-    const isActive = formData.get("isActive") === "true";
+    const isActive = formData.get("isActive") === "true" || formData.get("isActive") === "on";
 
     if (!id || !name) return { error: "Data tidak lengkap." };
 
+    const loc = await db.location.findUnique({ where: { id } });
+    if (!loc) return { error: "Lokasi tidak ditemukan." };
+
+    const slug = slugRaw || loc.slug;
+    if (slug !== loc.slug) {
+      const taken = await db.location.findFirst({
+        where: { slug, NOT: { id } },
+      });
+      if (taken) return { error: `Slug "${slug}" sudah dipakai.` };
+    }
+
     await db.location.update({
       where: { id },
-      data: { name, type, description, isActive },
+      data: { name, slug, type, description, isActive },
     });
 
     revalidatePath("/admin/lokasi");
     revalidatePath("/");
+    revalidatePath("/admin", "layout");
     return { success: "Lokasi diperbarui." };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function deleteLocationAction(
+  _prev: LokasiActionState | null,
+  formData: FormData
+): Promise<LokasiActionState> {
+  try {
+    await requireSuperAdmin();
+    const id = String(formData.get("id") ?? "").trim();
+    if (!id) return { error: "ID lokasi tidak valid." };
+
+    if (id === PROTECTED_LOCATION_ID) {
+      return { error: "KPP Padang tidak boleh dihapus." };
+    }
+
+    const loc = await db.location.findUnique({ where: { id } });
+    if (!loc) return { error: "Lokasi tidak ditemukan." };
+
+    const [itemCount, loanCount, activeLoanCount] = await Promise.all([
+      db.item.count({ where: { locationId: id } }),
+      db.loan.count({ where: { locationId: id } }),
+      db.loan.count({
+        where: { locationId: id, status: { in: ["pending", "approved"] } },
+      }),
+    ]);
+
+    if (itemCount > 0 || loanCount > 0) {
+      return {
+        error:
+          `Lokasi "${loc.name}" masih berisi ${itemCount} master barang dan ${loanCount} riwayat pinjam` +
+          (activeLoanCount > 0 ? ` (${activeLoanCount} masih aktif)` : "") +
+          `. Nonaktifkan lokasi jika tidak dipakai, atau kosongkan data terlebih dahulu.`,
+      };
+    }
+
+    await db.$transaction([
+      db.pushSubscription.deleteMany({ where: { locationId: id } }),
+      db.admin.deleteMany({ where: { locationId: id, role: "admin" } }),
+      db.location.delete({ where: { id } }),
+    ]);
+
+    revalidatePath("/admin/lokasi");
+    revalidatePath("/");
+    revalidatePath("/admin", "layout");
+    return { success: `Lokasi "${loc.name}" berhasil dihapus.` };
   } catch (e) {
     return { error: (e as Error).message };
   }
@@ -126,6 +193,90 @@ export async function createRegionalAdminAction(
 
     revalidatePath("/admin/lokasi");
     return { success: `Admin ${email} ditambahkan untuk lokasi ini.` };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function updateRegionalAdminAction(
+  _prev: LokasiActionState | null,
+  formData: FormData
+): Promise<LokasiActionState> {
+  try {
+    await requireSuperAdmin();
+    const id = String(formData.get("id") ?? "").trim();
+    const name = String(formData.get("name") ?? "").trim();
+    const email = String(formData.get("email") ?? "").trim().toLowerCase();
+    const locationId = String(formData.get("locationId") ?? "").trim();
+    const newPassword = String(formData.get("newPassword") ?? "").trim();
+    const nip = String(formData.get("nip") ?? "").trim() || null;
+
+    if (!id || !name || !email || !locationId) {
+      return { error: "Nama, email, dan lokasi wajib diisi." };
+    }
+
+    const target = await db.admin.findUnique({ where: { id } });
+    if (!target) return { error: "Admin tidak ditemukan." };
+    if (target.role !== "admin") {
+      return { error: "Hanya akun admin regional yang bisa diedit di sini." };
+    }
+
+    const emailTaken = await db.admin.findFirst({
+      where: { email, NOT: { id } },
+    });
+    if (emailTaken) return { error: "Email sudah dipakai akun lain." };
+
+    const location = await db.location.findUnique({ where: { id: locationId } });
+    if (!location) return { error: "Lokasi tidak valid." };
+
+    if (newPassword && newPassword.length < 8) {
+      return { error: "Password baru minimal 8 karakter." };
+    }
+
+    await db.admin.update({
+      where: { id },
+      data: {
+        name,
+        email,
+        nip,
+        locationId,
+        ...(newPassword ? { password: await hash(newPassword, 12) } : {}),
+      },
+    });
+
+    revalidatePath("/admin/lokasi");
+    revalidatePath("/admin", "layout");
+    return { success: `Admin ${email} diperbarui.` };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function deleteRegionalAdminAction(
+  _prev: LokasiActionState | null,
+  formData: FormData
+): Promise<LokasiActionState> {
+  try {
+    const session = await requireSuperAdmin();
+    const id = String(formData.get("id") ?? "").trim();
+    if (!id) return { error: "ID admin tidak valid." };
+
+    if (id === session.adminId) {
+      return { error: "Tidak bisa menghapus akun yang sedang dipakai." };
+    }
+
+    const target = await db.admin.findUnique({ where: { id } });
+    if (!target) return { error: "Admin tidak ditemukan." };
+    if (target.role === "superadmin") {
+      return { error: "Akun Super Admin tidak bisa dihapus dari halaman ini." };
+    }
+
+    await db.pushSubscription.deleteMany({ where: { adminId: id } });
+    await db.admin.delete({ where: { id } });
+
+    revalidatePath("/admin/lokasi");
+    revalidatePath("/admin", "layout");
+    return { success: `Admin ${target.email} dihapus.` };
   } catch (e) {
     return { error: (e as Error).message };
   }
