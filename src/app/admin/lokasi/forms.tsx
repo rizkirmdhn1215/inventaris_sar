@@ -1,11 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import {
-  createLocationAction,
-  createRegionalAdminAction,
-  type LokasiActionState,
-} from "./actions";
+import { createLocationAction, createRegionalAdminAction } from "./actions";
+import type { LokasiActionState } from "./constants";
 import { PasswordInput } from "@/components/password-input";
 
 export function CreateLocationForm() {

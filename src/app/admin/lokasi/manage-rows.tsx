@@ -10,9 +10,8 @@ import {
   deleteLocationAction,
   updateRegionalAdminAction,
   deleteRegionalAdminAction,
-  PROTECTED_LOCATION_ID,
-  type LokasiActionState,
 } from "./actions";
+import { PROTECTED_LOCATION_ID, type LokasiActionState } from "./constants";
 
 export type LocationRowData = {
   id: string;

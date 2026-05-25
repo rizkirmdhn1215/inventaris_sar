@@ -5,9 +5,7 @@ import { revalidatePath } from "next/cache";
 import { verifySession } from "@/lib/auth/session";
 import { hash } from "bcryptjs";
 import { copyInternalBorrowersToLocation } from "@/lib/internal-borrowers";
-
-/** KPP Padang — canonical site; must not be deleted. */
-export const PROTECTED_LOCATION_ID = "00000000-0000-4000-8000-000000000001";
+import { PROTECTED_LOCATION_ID, type LokasiActionState } from "./constants";
 
 function slugify(name: string) {
   return name
@@ -31,8 +29,6 @@ async function requireSuperAdmin() {
   }
   return session;
 }
-
-export type LokasiActionState = { error?: string; success?: string };
 
 export async function createLocationAction(
   _prev: LokasiActionState | null,
