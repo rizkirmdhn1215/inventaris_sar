@@ -60,6 +60,12 @@ export async function GET(
       pengawasGudangNip?: string;
       kepalaGudangName?: string;
       orderedLoanItemIds?: string[];
+      borrowerSignatureDataUrl?: string | null;
+      adminSignatureDataUrl?: string | null;
+      pengawasSignatureDataUrl?: string | null;
+      borrowerSignatureScale?: number;
+      adminSignatureScale?: number;
+      pengawasSignatureScale?: number;
     } = {};
     try {
       meta = loan.documentUrl ? JSON.parse(loan.documentUrl) : {};
@@ -129,6 +135,13 @@ export async function GET(
         items: pdfItems,
         kopImage,
         isDraft,
+        compact: pdfItems.length <= 6,
+        borrowerSignatureDataUrl: meta.borrowerSignatureDataUrl ?? undefined,
+        adminSignatureDataUrl: meta.adminSignatureDataUrl ?? undefined,
+        pengawasSignatureDataUrl: meta.pengawasSignatureDataUrl ?? undefined,
+        borrowerSignatureScale: meta.borrowerSignatureScale,
+        adminSignatureScale: meta.adminSignatureScale,
+        pengawasSignatureScale: meta.pengawasSignatureScale,
       })
     );
 

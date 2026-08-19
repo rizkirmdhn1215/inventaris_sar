@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { approveLoanAction } from "../actions";
 import { DEFAULT_PENGAWAS_GUDANG } from "@/lib/gudang-signatories";
+import { SignaturePad } from "@/components/signature-pad";
 
 type ItemRow = {
   loanItemId: string;
@@ -72,16 +73,25 @@ export function DocumentEditor({
         />
       </div>
 
-      <div>
-        <label className="block text-xs text-zinc-400 mb-1">Tanda tangan peminjam</label>
-        <input
-          name="borrowerSignerName"
-          defaultValue={borrowerName}
-          required
-          className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
+      {/* ── Peminjam ─────────────────────────────────────── */}
+      <div className="rounded-xl border border-zinc-800 p-3 space-y-3">
+        <p className="text-xs font-medium text-orange-300/90">Peminjam</p>
+        <div>
+          <label className="block text-xs text-zinc-400 mb-1">Nama peminjam</label>
+          <input
+            name="borrowerSignerName"
+            defaultValue={borrowerName}
+            required
+            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white"
+          />
+        </div>
+        <SignaturePad
+          inputName="borrowerSignatureDataUrl"
+          label="Tanda tangan peminjam (opsional)"
         />
       </div>
 
+      {/* ── Petugas Gudang ───────────────────────────────── */}
       <div className="rounded-xl border border-zinc-800 p-3 space-y-3">
         <p className="text-xs font-medium text-orange-300/90">Petugas Gudang</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -104,8 +114,13 @@ export function DocumentEditor({
             />
           </div>
         </div>
+        <SignaturePad
+          inputName="adminSignatureDataUrl"
+          label="Tanda tangan Petugas Gudang (opsional)"
+        />
       </div>
 
+      {/* ── Pengawas Gudang ──────────────────────────────── */}
       <div className="rounded-xl border border-zinc-800 p-3 space-y-3">
         <p className="text-xs font-medium text-orange-300/90">Pengawas Gudang</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -127,8 +142,13 @@ export function DocumentEditor({
             />
           </div>
         </div>
+        <SignaturePad
+          inputName="pengawasSignatureDataUrl"
+          label="Tanda tangan Pengawas Gudang (opsional)"
+        />
       </div>
 
+      {/* ── Daftar barang ────────────────────────────────── */}
       <div className="rounded-xl border border-zinc-800 p-3">
         <p className="text-sm font-medium text-zinc-200 mb-2">
           Daftar barang di dokumen (drag untuk urutkan)

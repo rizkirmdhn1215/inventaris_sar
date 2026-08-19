@@ -25,6 +25,14 @@ export async function approveLoanAction(formData: FormData) {
   const letterBody = String(formData.get("letterBody") ?? "").trim();
   const orderedLoanItemIdsRaw = String(formData.get("orderedLoanItemIds") ?? "");
 
+  // Signature data URLs (base64 PNG, empty string means none provided)
+  const borrowerSignatureDataUrl = String(formData.get("borrowerSignatureDataUrl") ?? "").trim() || null;
+  const adminSignatureDataUrl = String(formData.get("adminSignatureDataUrl") ?? "").trim() || null;
+  const pengawasSignatureDataUrl = String(formData.get("pengawasSignatureDataUrl") ?? "").trim() || null;
+  const borrowerSignatureScale = Number(formData.get("borrowerSignatureDataUrlScale") ?? 100) || 100;
+  const adminSignatureScale = Number(formData.get("adminSignatureDataUrlScale") ?? 100) || 100;
+  const pengawasSignatureScale = Number(formData.get("pengawasSignatureDataUrlScale") ?? 100) || 100;
+
   if (!loanId || !adminSignerName || !borrowerSignerName || !letterNumber) {
     redirect(`/admin/peminjaman/${loanId}?error=Field%20dokumen%20wajib%20diisi`);
   }
@@ -58,6 +66,7 @@ export async function approveLoanAction(formData: FormData) {
   // Generate PDF
   let documentUrl: string | null = null;
   try {
+    const pdfGroupedItems = groupLoanItemsForPdf(sortedItems);
     const pdfBuffer = await renderToBuffer(
       SuratPeminjamanDocument({
         letterNumber,
@@ -72,7 +81,16 @@ export async function approveLoanAction(formData: FormData) {
         adminSignerNip: adminSignerNip ?? undefined,
         pengawasGudangName,
         pengawasGudangNip: pengawasGudangNip ?? undefined,
-        items: groupLoanItemsForPdf(sortedItems),
+        items: pdfGroupedItems,
+        // Use compact spacing when item count is small to maximise chance of
+        // keeping the signature block on the same page as the content.
+        compact: pdfGroupedItems.length <= 6,
+        borrowerSignatureDataUrl: borrowerSignatureDataUrl ?? undefined,
+        adminSignatureDataUrl: adminSignatureDataUrl ?? undefined,
+        pengawasSignatureDataUrl: pengawasSignatureDataUrl ?? undefined,
+        borrowerSignatureScale,
+        adminSignatureScale,
+        pengawasSignatureScale,
       })
     );
 
@@ -113,6 +131,13 @@ export async function approveLoanAction(formData: FormData) {
           pengawasGudangNip,
           orderedLoanItemIds,
           pdfUrl: documentUrl,
+          // Signature images stored as base64 PNG data URLs
+          borrowerSignatureDataUrl,
+          adminSignatureDataUrl,
+          pengawasSignatureDataUrl,
+          borrowerSignatureScale,
+          adminSignatureScale,
+          pengawasSignatureScale,
         }),
       },
     });
