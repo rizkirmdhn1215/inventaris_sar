@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { Package, Warehouse, ArrowRightLeft, Plus, AlertTriangle, Wrench } from "lucide-react";
+import { Package, Warehouse, ArrowRightLeft, Plus, AlertTriangle, Wrench, FileDown } from "lucide-react";
 import { upsertItemAction } from "./actions";
 import { STATUS_COLOR } from "@/lib/format";
 import { QrViewerButton } from "./qr-viewer";
@@ -182,6 +182,28 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
               </Link>
             </div>
           </form>
+
+          {/* Download Excel */}
+          {(() => {
+            const exportParams = new URLSearchParams({
+              locationId: locId ?? "",
+            });
+            if (searchQ) exportParams.set("q", searchQ);
+            if (searchMerk) exportParams.set("merk", searchMerk);
+            if (searchCategory) exportParams.set("category", searchCategory);
+            return (
+              <div className="flex justify-end">
+                <Link
+                  href={`/api/items/export?${exportParams.toString()}`}
+                  target="_blank"
+                  className="inline-flex items-center gap-2 rounded-xl border border-emerald-700/60 bg-emerald-950/30 hover:bg-emerald-900/40 px-4 py-2 text-sm font-medium text-emerald-300 transition-colors"
+                >
+                  <FileDown className="w-4 h-4" />
+                  Download Excel
+                </Link>
+              </div>
+            );
+          })()}
 
           <form
             action={upsertItemAction}
