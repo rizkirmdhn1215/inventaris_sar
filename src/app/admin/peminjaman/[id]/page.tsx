@@ -2,10 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { verifySession } from "@/lib/auth/session";
-import { formatTanggalID, STATUS_COLOR } from "@/lib/format";
-import { FileText, Printer, CalendarClock, Building2 } from "lucide-react";
+import { formatTanggalID, STATUS_COLOR, STATUS_LABEL } from "@/lib/format";
+import { FileText, Printer, CalendarClock, Building2, XCircle } from "lucide-react";
 import { DocumentEditor } from "./document-editor";
+import { DeleteLoanButton } from "./delete-loan-button";
+import { LoanItemsEditor } from "./loan-items-editor";
 import { extendLoanDeadlineAction } from "../actions";
+import { getBorrowCatalog } from "@/lib/borrow-catalog";
 
 type PeminjamanDetailProps = {
   params: Promise<{ id: string }>;
@@ -34,7 +37,11 @@ export default async function PeminjamanDetailPage({
         include: {
           itemUnit: {
             include: {
-              item: true,
+              item: {
+                include: {
+                  category: true,
+                },
+              },
             },
           },
         },
@@ -45,6 +52,8 @@ export default async function PeminjamanDetailPage({
   if (!loan) notFound();
 
   const isApproved = loan.status === "approved" || loan.status === "returned";
+  const isPending = loan.status === "pending";
+  const isDenied = loan.status === "denied";
   const isExternal = loan.loanType === "external";
 
   const today = new Date();
@@ -62,9 +71,52 @@ export default async function PeminjamanDetailPage({
       ? suggestedDate.toISOString().slice(0, 10)
       : minNewDateStr;
 
+  // Prepare data for LoanItemsEditor (only when pending)
+  const itemMap = new Map<
+    string,
+    {
+      itemId: string;
+      name: string;
+      merk: string | null;
+      categoryName: string | null;
+      quantity: number;
+    }
+  >();
+
+  for (const li of loan.loanItems) {
+    const item = li.itemUnit.item;
+    const existing = itemMap.get(item.id);
+    if (existing) {
+      existing.quantity += 1;
+    } else {
+      itemMap.set(item.id, {
+        itemId: item.id,
+        name: item.name,
+        merk: item.merk,
+        categoryName: item.category?.name ?? null,
+        quantity: 1,
+      });
+    }
+  }
+
+  const catalog = isPending ? await getBorrowCatalog(loan.locationId) : [];
+  const catalogMap = new Map(catalog.map((c) => [c.itemId, c]));
+
+  const editorItems = Array.from(itemMap.values()).map((it) => {
+    const cat = catalogMap.get(it.itemId);
+    return {
+      itemId: it.itemId,
+      name: it.name,
+      merk: it.merk,
+      categoryName: it.categoryName ?? cat?.categoryName ?? null,
+      quantity: it.quantity,
+      availableCount: Math.max(it.quantity, cat?.availableCount ?? it.quantity),
+    };
+  });
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-semibold text-white">
             Detail Peminjaman
@@ -73,11 +125,14 @@ export default async function PeminjamanDetailPage({
             {loan.borrowerName} · {loan.borrowerDivision}
           </p>
         </div>
-        <span
-          className={`self-start inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border ${STATUS_COLOR[loan.status] ?? ""}`}
-        >
-          {loan.status}
-        </span>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <span
+            className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border ${STATUS_COLOR[loan.status] ?? ""}`}
+          >
+            {STATUS_LABEL[loan.status] ?? loan.status}
+          </span>
+          <DeleteLoanButton loanId={loan.id} borrowerName={loan.borrowerName} />
+        </div>
       </div>
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -128,12 +183,22 @@ export default async function PeminjamanDetailPage({
 
       {query.success === "approved" ? (
         <p className="text-sm text-emerald-300 bg-emerald-950/40 border border-emerald-900/40 rounded-lg px-3 py-2">
-          Request berhasil di-approve. Surat PDF sudah di-generate.
+          Request berhasil disetujui. Surat PDF sudah dibuat.
         </p>
       ) : null}
       {query.success === "extended" ? (
         <p className="text-sm text-emerald-300 bg-emerald-950/40 border border-emerald-900/40 rounded-lg px-3 py-2">
           Tanggal kembali berhasil diperpanjang.
+        </p>
+      ) : null}
+      {query.success === "updated" ? (
+        <p className="text-sm text-emerald-300 bg-emerald-950/40 border border-emerald-900/40 rounded-lg px-3 py-2">
+          Daftar barang peminjaman berhasil diperbarui.
+        </p>
+      ) : null}
+      {query.success === "denied" ? (
+        <p className="text-sm text-red-300 bg-red-950/40 border border-red-900/40 rounded-lg px-3 py-2">
+          Peminjaman telah ditolak.
         </p>
       ) : null}
       {query.error ? (
@@ -142,6 +207,7 @@ export default async function PeminjamanDetailPage({
         </p>
       ) : null}
 
+      {/* When approved/returned: Show PDF link */}
       {isApproved ? (
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-wrap gap-2 items-center">
           <FileText className="w-5 h-5 text-orange-400" />
@@ -149,32 +215,61 @@ export default async function PeminjamanDetailPage({
           <Link
             href={`/api/loans/${loan.id}/pdf`}
             target="_blank"
-            className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-orange-600 hover:bg-orange-500 text-white"
+            className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-medium"
           >
             <Printer className="w-3.5 h-3.5" /> Lihat / Cetak Surat
           </Link>
         </div>
-      ) : (
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-          <h2 className="text-sm font-medium text-white mb-3">
-            Editor Dokumen Surat
-          </h2>
-          <DocumentEditor
-            loanId={loan.id}
-            borrowerName={loan.borrowerName}
-            adminDefaultName={session?.name ?? "Admin"}
-            adminDefaultNip={currentAdmin?.nip}
-            defaultLetterNumber={loan.externalLetterNumber ?? undefined}
-            initialItems={loan.loanItems.map((li) => ({
-              loanItemId: li.id,
-              itemName: li.itemUnit.item.name,
-              qrCode: li.itemUnit.qrCode,
-              condition: li.conditionAtBorrow,
-            }))}
-          />
-        </div>
-      )}
+      ) : null}
 
+      {/* When denied: Show notice */}
+      {isDenied ? (
+        <div className="rounded-2xl border border-red-900/40 bg-red-950/15 p-4 flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400">
+            <XCircle className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-red-300">Peminjaman Ditolak</p>
+            <p className="text-xs text-zinc-400">
+              Permintaan peminjaman ini telah ditolak oleh admin. Unit barang tidak dipinjamkan dan tersedia di gudang.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {/* When pending: Admin can edit items/quantities AND preview/approve/deny document */}
+      {isPending ? (
+        <>
+          <LoanItemsEditor
+            loanId={loan.id}
+            initialItems={editorItems}
+            catalog={catalog}
+          />
+
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+            <h2 className="text-sm font-medium text-white mb-3">
+              Editor Dokumen Surat
+            </h2>
+            <DocumentEditor
+              loanId={loan.id}
+              borrowerName={loan.borrowerName}
+              adminDefaultName={session?.name ?? "Admin"}
+              adminDefaultNip={currentAdmin?.nip}
+              defaultLetterNumber={loan.externalLetterNumber ?? undefined}
+              borrowerSignatureDataUrl={loan.borrowerSignatureDataUrl}
+              borrowerSignatureScale={loan.borrowerSignatureScale}
+              initialItems={loan.loanItems.map((li) => ({
+                loanItemId: li.id,
+                itemName: li.itemUnit.item.name,
+                qrCode: li.itemUnit.qrCode,
+                condition: li.conditionAtBorrow,
+              }))}
+            />
+          </div>
+        </>
+      ) : null}
+
+      {/* Extension section for approved loans */}
       {isApproved && loan.status !== "returned" ? (
         <div
           className={`rounded-2xl border p-4 space-y-3 ${
@@ -232,9 +327,10 @@ export default async function PeminjamanDetailPage({
         </div>
       ) : null}
 
+      {/* Daftar barang fisik unit */}
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden">
         <div className="px-4 py-3 border-b border-zinc-800 text-sm font-medium text-zinc-200">
-          Daftar Barang
+          Daftar Unit Fisik Barang ({loan.loanItems.length} unit)
         </div>
         <ul className="divide-y divide-zinc-800">
           {loan.loanItems.map((li) => (
@@ -248,9 +344,13 @@ export default async function PeminjamanDetailPage({
               </span>
             </li>
           ))}
+          {loan.loanItems.length === 0 ? (
+            <li className="p-4 text-center text-xs text-zinc-500">
+              Belum ada unit barang yang dialokasikan.
+            </li>
+          ) : null}
         </ul>
       </div>
     </div>
   );
 }
-

@@ -25,6 +25,10 @@ export async function createLoanRequestAction(formData: FormData) {
   const contactVia = String(formData.get("contactVia") ?? "").trim() || null;
   const internalBorrowerId =
     String(formData.get("internalBorrowerId") ?? "").trim() || null;
+  const borrowerSignatureDataUrl =
+    String(formData.get("borrowerSignatureDataUrl") ?? "").trim() || null;
+  const borrowerSignatureScale =
+    Number(formData.get("borrowerSignatureDataUrlScale") ?? 100) || 100;
 
   const resolved = await resolveLoanLocationFromForm(formData);
   const lokasiQs = resolved ? `&lokasi=${encodeURIComponent(resolved.slug)}` : "";
@@ -111,6 +115,8 @@ export async function createLoanRequestAction(formData: FormData) {
       externalLetterNumber,
       contactPerson,
       contactVia,
+      borrowerSignatureDataUrl,
+      borrowerSignatureScale,
     },
   });
 

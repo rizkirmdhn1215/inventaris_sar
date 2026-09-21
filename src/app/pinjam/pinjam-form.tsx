@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   Check,
   FileText,
+  PenLine,
 } from "lucide-react";
 import { createLoanRequestAction } from "./actions";
 import {
@@ -20,6 +21,7 @@ import {
 } from "@/components/internal-borrower-field";
 import type { BorrowCatalogItem } from "@/lib/borrow-catalog";
 import type { ScanUnitOption } from "@/lib/borrow-catalog";
+import { SignaturePad } from "@/components/signature-pad";
 
 type SelectedLine = BorrowCatalogItem & { quantity: number };
 
@@ -523,6 +525,21 @@ export function PinjamForm({
               ))}
             </ul>
           )}
+        </div>
+
+        {/* ── Tanda tangan peminjam ──────────────────────── */}
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <PenLine className="w-4 h-4 text-orange-400" />
+            <p className="text-sm font-medium text-white">Tanda Tangan Peminjam</p>
+          </div>
+          <p className="text-xs text-zinc-400 mb-3">
+            Tanda tangani formulir sebelum dikirim ke admin.
+          </p>
+          <SignaturePad
+            inputName="borrowerSignatureDataUrl"
+            label="Gambar tanda tangan Anda"
+          />
         </div>
 
         <button

@@ -8,6 +8,7 @@ import { SuratPeminjamanDocument } from "@/components/pdf/surat-peminjaman";
 import { uploadBufferToMinio } from "@/lib/minio";
 import { DEFAULT_PENGAWAS_GUDANG } from "@/lib/gudang-signatories";
 import { groupLoanItemsForPdf } from "@/lib/inventory";
+import { allocateAvailableUnits } from "@/lib/inventory";
 
 export async function approveLoanAction(formData: FormData) {
   const loanId = String(formData.get("loanId") ?? "");
@@ -55,6 +56,12 @@ export async function approveLoanAction(formData: FormData) {
     redirect("/admin/peminjaman?error=Loan%20tidak%20ditemukan");
   }
 
+  // Use borrower signature from DB if not provided in form (pre-filled from loan submission)
+  const finalBorrowerSignatureDataUrl =
+    borrowerSignatureDataUrl ?? loan!.borrowerSignatureDataUrl ?? null;
+  const finalBorrowerSignatureScale =
+    borrowerSignatureDataUrl ? borrowerSignatureScale : (loan!.borrowerSignatureScale ?? 100);
+
   // Sort items by orderedLoanItemIds preference
   const orderMap = new Map(orderedLoanItemIds.map((id, idx) => [id, idx]));
   const sortedItems = [...loan!.loanItems].sort((a, b) => {
@@ -85,10 +92,10 @@ export async function approveLoanAction(formData: FormData) {
         // Use compact spacing when item count is small to maximise chance of
         // keeping the signature block on the same page as the content.
         compact: pdfGroupedItems.length <= 6,
-        borrowerSignatureDataUrl: borrowerSignatureDataUrl ?? undefined,
+        borrowerSignatureDataUrl: finalBorrowerSignatureDataUrl ?? undefined,
         adminSignatureDataUrl: adminSignatureDataUrl ?? undefined,
         pengawasSignatureDataUrl: pengawasSignatureDataUrl ?? undefined,
-        borrowerSignatureScale,
+        borrowerSignatureScale: finalBorrowerSignatureScale,
         adminSignatureScale,
         pengawasSignatureScale,
       })
@@ -132,10 +139,10 @@ export async function approveLoanAction(formData: FormData) {
           orderedLoanItemIds,
           pdfUrl: documentUrl,
           // Signature images stored as base64 PNG data URLs
-          borrowerSignatureDataUrl,
+          borrowerSignatureDataUrl: finalBorrowerSignatureDataUrl,
           adminSignatureDataUrl,
           pengawasSignatureDataUrl,
-          borrowerSignatureScale,
+          borrowerSignatureScale: finalBorrowerSignatureScale,
           adminSignatureScale,
           pengawasSignatureScale,
         }),
@@ -152,6 +159,166 @@ export async function approveLoanAction(formData: FormData) {
 
   revalidatePath("/admin/peminjaman");
   redirect(`/admin/peminjaman/${loanId}?success=approved`);
+}
+
+export async function denyLoanAction(formData: FormData) {
+  const loanId = String(formData.get("loanId") ?? "");
+
+  if (!loanId) {
+    redirect("/admin/peminjaman?error=Loan%20ID%20tidak%20valid");
+  }
+
+  const loan = await db.loan.findUnique({
+    where: { id: loanId },
+    include: { loanItems: true },
+  });
+
+  if (!loan) {
+    redirect("/admin/peminjaman?error=Loan%20tidak%20ditemukan");
+  }
+
+  await db.$transaction(async (tx) => {
+    // Release allocated units back to available
+    await tx.itemUnit.updateMany({
+      where: {
+        id: { in: loan!.loanItems.map((li) => li.itemUnitId) },
+        status: "borrowed",
+      },
+      data: { status: "available" },
+    });
+
+    await tx.loan.update({
+      where: { id: loanId },
+      data: { status: "denied" },
+    });
+  });
+
+  revalidatePath("/admin/peminjaman");
+  redirect(`/admin/peminjaman/${loanId}?success=denied`);
+}
+
+export async function deleteLoanAction(formData: FormData) {
+  const loanId = String(formData.get("loanId") ?? "");
+
+  if (!loanId) {
+    redirect("/admin/peminjaman?error=Loan%20ID%20tidak%20valid");
+  }
+
+  const loan = await db.loan.findUnique({
+    where: { id: loanId },
+    include: { loanItems: true },
+  });
+
+  if (!loan) {
+    redirect("/admin/peminjaman?error=Loan%20tidak%20ditemukan");
+  }
+
+  await db.$transaction(async (tx) => {
+    // Release units back to available if they were borrowed
+    const borrowedUnitIds = loan!.loanItems.map((li) => li.itemUnitId);
+    if (borrowedUnitIds.length > 0) {
+      await tx.itemUnit.updateMany({
+        where: {
+          id: { in: borrowedUnitIds },
+          status: "borrowed",
+        },
+        data: { status: "available" },
+      });
+    }
+
+    // Delete the loan (cascades to loanItems)
+    await tx.loan.delete({
+      where: { id: loanId },
+    });
+  });
+
+  revalidatePath("/admin/peminjaman");
+  redirect("/admin/peminjaman?success=Peminjaman%20berhasil%20dihapus");
+}
+
+export async function updateLoanItemsAction(formData: FormData) {
+  const loanId = String(formData.get("loanId") ?? "");
+
+  if (!loanId) {
+    redirect("/admin/peminjaman?error=Loan%20ID%20tidak%20valid");
+  }
+
+  const loan = await db.loan.findUnique({
+    where: { id: loanId },
+    include: { loanItems: true },
+  });
+
+  if (!loan || loan.status !== "pending") {
+    redirect(`/admin/peminjaman/${loanId}?error=Hanya%20peminjaman%20berstatus%20Menunggu%20yang%20bisa%20diedit`);
+  }
+
+  const borrowItemIds = formData.getAll("borrowItemId").map((v) => String(v));
+  const borrowQuantities = formData.getAll("borrowQuantity").map((v) => Number(String(v)));
+
+  const lines = borrowItemIds
+    .map((itemId, i) => ({
+      itemId,
+      quantity: borrowQuantities[i],
+    }))
+    .filter((l) => l.itemId && Number.isInteger(l.quantity) && l.quantity > 0);
+
+  if (lines.length === 0) {
+    redirect(`/admin/peminjaman/${loanId}?error=Pilih%20minimal%201%20barang`);
+  }
+
+  // Release old units
+  const oldUnitIds = loan.loanItems.map((li) => li.itemUnitId);
+  if (oldUnitIds.length > 0) {
+    await db.itemUnit.updateMany({
+      where: { id: { in: oldUnitIds }, status: "borrowed" },
+      data: { status: "available" },
+    });
+  }
+
+  // Delete old loan items
+  await db.loanItem.deleteMany({ where: { loanId } });
+
+  // Allocate new units
+  const usedUnitIds: string[] = [];
+  const unitsToLoan: { id: string; condition: string }[] = [];
+
+  for (const line of lines) {
+    const item = await db.item.findFirst({
+      where: { id: line.itemId, locationId: loan.locationId },
+      select: { name: true },
+    });
+    if (!item) {
+      redirect(`/admin/peminjaman/${loanId}?error=Barang%20tidak%20valid%20untuk%20lokasi%20ini`);
+    }
+
+    const allocated = await allocateAvailableUnits(
+      line.itemId,
+      line.quantity,
+      usedUnitIds
+    );
+    if (!allocated) {
+      redirect(
+        `/admin/peminjaman/${loanId}?error=Stok%20${encodeURIComponent(item.name)}%20tidak%20cukup%20(${line.quantity}%20diminta)`
+      );
+    }
+    for (const u of allocated) {
+      usedUnitIds.push(u.id);
+      unitsToLoan.push(u);
+    }
+  }
+
+  // Create new loan items
+  await db.loanItem.createMany({
+    data: unitsToLoan.map((unit) => ({
+      loanId,
+      itemUnitId: unit.id,
+      conditionAtBorrow: unit.condition,
+    })),
+  });
+
+  revalidatePath(`/admin/peminjaman/${loanId}`);
+  revalidatePath("/admin/peminjaman");
+  redirect(`/admin/peminjaman/${loanId}?success=updated`);
 }
 
 export async function extendLoanDeadlineAction(formData: FormData) {

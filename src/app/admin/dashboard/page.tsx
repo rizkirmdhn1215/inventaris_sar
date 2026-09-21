@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { Boxes, ArrowUpRight, Clock, AlertTriangle, Wrench, FileDown, MapPin } from "lucide-react";
-import { formatTanggalID, startOfMonth, endOfMonth, STATUS_COLOR } from "@/lib/format";
+import { formatTanggalID, startOfMonth, endOfMonth, STATUS_COLOR, STATUS_LABEL } from "@/lib/format";
 import { parseLoanLogFilters, buildRecapQueryString } from "@/lib/loan-filters";
 import { groupLoanItemsForPdf } from "@/lib/inventory";
 import { requireAdminPageScope } from "@/lib/admin-page";
@@ -290,7 +290,7 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
                         <span
                           className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border ${STATUS_COLOR[loan.status] ?? ""}`}
                         >
-                          {loan.status}
+                          {STATUS_LABEL[loan.status] ?? loan.status}
                         </span>
                       </Link>
                     </td>

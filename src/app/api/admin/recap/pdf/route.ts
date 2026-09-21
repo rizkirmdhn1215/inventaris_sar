@@ -6,6 +6,7 @@ import { parseLoanLogFilters } from "@/lib/loan-filters";
 import { resolveAdminScope } from "@/lib/location-scope";
 import { groupLoanItemsForPdf } from "@/lib/inventory";
 import { RekapPeminjamanDocument } from "@/components/pdf/rekap-peminjaman";
+import { STATUS_LABEL } from "@/lib/format";
 
 const ID_MONTHS = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -81,7 +82,7 @@ export async function GET(req: Request) {
         borrowerDivision: loan.borrowerDivision,
         borrowDate: loan.borrowDate,
         expectedReturnDate: loan.expectedReturnDate,
-        status: loan.status,
+        status: STATUS_LABEL[loan.status] ?? loan.status,
         itemSummary: formatItemSummary(loan.loanItems),
         purpose: loan.purpose,
       })),

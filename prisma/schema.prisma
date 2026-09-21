@@ -126,7 +126,7 @@ model Loan {
   purpose              String
   borrowDate           DateTime  @map("borrow_date") @db.Date
   expectedReturnDate   DateTime  @map("expected_return_date") @db.Date
-  status               String    @default("pending") // pending | approved | returned
+  status               String    @default("pending") // pending | approved | returned | denied
   documentUrl          String?   @map("document_url")
   approvedBy           String?   @map("approved_by")
   approvedAt           DateTime? @map("approved_at")
@@ -136,6 +136,8 @@ model Loan {
   contactPerson        String?   @map("contact_person")
   contactVia           String?   @map("contact_via")
   extendedCount        Int       @default(0) @map("extended_count")
+  borrowerSignatureDataUrl String? @map("borrower_signature_data_url")
+  borrowerSignatureScale   Int     @default(100) @map("borrower_signature_scale")
   createdAt            DateTime  @default(now()) @map("created_at")
 
   location     Location      @relation(fields: [locationId], references: [id], onDelete: Cascade)

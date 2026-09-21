@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireAdminPageScope } from "@/lib/admin-page";
+import { STATUS_LABEL } from "@/lib/format";
 
 type PengembalianPageProps = {
   searchParams: Promise<{ success?: string; lokasi?: string }>;
@@ -51,7 +52,7 @@ export default async function PengembalianPage({
             {loans.map((loan) => (
               <tr key={loan.id} className="border-b border-zinc-800/70 last:border-0">
                 <td className="px-4 py-2 text-zinc-100">{loan.borrowerName}</td>
-                <td className="px-4 py-2 text-zinc-300">{loan.status}</td>
+                <td className="px-4 py-2 text-zinc-300">{STATUS_LABEL[loan.status] ?? loan.status}</td>
                 <td className="px-4 py-2 text-zinc-300">{loan.loanItems.length}</td>
                 <td className="px-4 py-2">
                   {loan.status === "approved" ? (

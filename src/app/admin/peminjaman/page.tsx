@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { STATUS_COLOR } from "@/lib/format";
+import { STATUS_COLOR, STATUS_LABEL } from "@/lib/format";
 import { requireAdminPageScope } from "@/lib/admin-page";
 import { appendLokasiQuery } from "@/lib/location-scope";
 
@@ -10,9 +10,10 @@ type PeminjamanPageProps = {
 
 const STATUS_TABS = [
   { value: "", label: "Semua" },
-  { value: "pending", label: "Pending" },
-  { value: "approved", label: "Approved" },
-  { value: "returned", label: "Returned" },
+  { value: "pending", label: "Menunggu" },
+  { value: "approved", label: "Disetujui" },
+  { value: "returned", label: "Dikembalikan" },
+  { value: "denied", label: "Ditolak" },
 ];
 
 export default async function PeminjamanPage({
@@ -21,7 +22,7 @@ export default async function PeminjamanPage({
   const params = await searchParams;
   const { scope } = await requireAdminPageScope(params.lokasi);
   const statusFilter =
-    params.status && ["pending", "approved", "returned"].includes(params.status)
+    params.status && ["pending", "approved", "returned", "denied"].includes(params.status)
       ? params.status
       : null;
 
@@ -42,13 +43,15 @@ export default async function PeminjamanPage({
       <div>
         <h1 className="text-2xl font-semibold text-white">Peminjaman</h1>
         <p className="text-sm text-zinc-400">
-          Review request, edit dokumen, lalu approve.
+          Review request, sesuaikan barang, edit dokumen, setujui atau tolak peminjaman.
         </p>
       </div>
 
       {params.success ? (
         <p className="text-sm text-emerald-300 bg-emerald-950/40 border border-emerald-900/40 rounded-lg px-3 py-2">
-          Request berhasil di-approve.
+          {params.success === "approved"
+            ? "Request berhasil disetujui."
+            : params.success}
         </p>
       ) : null}
       {params.error ? (
@@ -60,9 +63,10 @@ export default async function PeminjamanPage({
       <div className="flex gap-2 border-b border-zinc-800 overflow-x-auto">
         {STATUS_TABS.map((tab) => {
           const isActive = (statusFilter ?? "") === tab.value;
-          const href = tab.value
+          const basePath = tab.value
             ? `/admin/peminjaman?status=${tab.value}`
             : `/admin/peminjaman`;
+          const href = appendLokasiQuery(basePath, params.lokasi);
           return (
             <Link
               key={tab.value || "all"}
@@ -98,7 +102,7 @@ export default async function PeminjamanPage({
               >
                 <td className="px-4 py-2 text-zinc-100">
                   <Link
-                    href={`/admin/peminjaman/${loan.id}`}
+                    href={appendLokasiQuery(`/admin/peminjaman/${loan.id}`, params.lokasi)}
                     className="block w-full"
                   >
                     <div className="flex items-center gap-2">
@@ -113,7 +117,7 @@ export default async function PeminjamanPage({
                 </td>
                 <td className="px-4 py-2 text-zinc-300">
                   <Link
-                    href={`/admin/peminjaman/${loan.id}`}
+                    href={appendLokasiQuery(`/admin/peminjaman/${loan.id}`, params.lokasi)}
                     className="block w-full"
                   >
                     {loan.loanType === "external" && loan.instansi
@@ -123,22 +127,22 @@ export default async function PeminjamanPage({
                 </td>
                 <td className="px-4 py-2 text-zinc-300">
                   <Link
-                    href={`/admin/peminjaman/${loan.id}`}
+                    href={appendLokasiQuery(`/admin/peminjaman/${loan.id}`, params.lokasi)}
                     className="block w-full"
                   >
-                    {loan.loanItems.length}
+                    {loan.loanItems.length} unit
                   </Link>
                 </td>
                 <td className="px-4 py-2">
                   <span
                     className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border ${STATUS_COLOR[loan.status] ?? ""}`}
                   >
-                    {loan.status}
+                    {STATUS_LABEL[loan.status] ?? loan.status}
                   </span>
                 </td>
                 <td className="px-4 py-2 text-right">
                   <Link
-                    href={`/admin/peminjaman/${loan.id}`}
+                    href={appendLokasiQuery(`/admin/peminjaman/${loan.id}`, params.lokasi)}
                     className="text-orange-400 hover:text-orange-300"
                   >
                     Buka →
@@ -159,4 +163,3 @@ export default async function PeminjamanPage({
     </div>
   );
 }
-
