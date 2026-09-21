@@ -38,6 +38,9 @@ export default async function PeminjamanPage({
     take: 100,
   });
 
+  const withLokasi = (url: string) =>
+    params.lokasi ? appendLokasiQuery(url, params.lokasi) : url;
+
   return (
     <div className="space-y-4">
       <div>
@@ -66,7 +69,7 @@ export default async function PeminjamanPage({
           const basePath = tab.value
             ? `/admin/peminjaman?status=${tab.value}`
             : `/admin/peminjaman`;
-          const href = appendLokasiQuery(basePath, params.lokasi);
+          const href = withLokasi(basePath);
           return (
             <Link
               key={tab.value || "all"}
@@ -102,7 +105,7 @@ export default async function PeminjamanPage({
               >
                 <td className="px-4 py-2 text-zinc-100">
                   <Link
-                    href={appendLokasiQuery(`/admin/peminjaman/${loan.id}`, params.lokasi)}
+                    href={withLokasi(`/admin/peminjaman/${loan.id}`)}
                     className="block w-full"
                   >
                     <div className="flex items-center gap-2">
@@ -117,7 +120,7 @@ export default async function PeminjamanPage({
                 </td>
                 <td className="px-4 py-2 text-zinc-300">
                   <Link
-                    href={appendLokasiQuery(`/admin/peminjaman/${loan.id}`, params.lokasi)}
+                    href={withLokasi(`/admin/peminjaman/${loan.id}`)}
                     className="block w-full"
                   >
                     {loan.loanType === "external" && loan.instansi
@@ -127,7 +130,7 @@ export default async function PeminjamanPage({
                 </td>
                 <td className="px-4 py-2 text-zinc-300">
                   <Link
-                    href={appendLokasiQuery(`/admin/peminjaman/${loan.id}`, params.lokasi)}
+                    href={withLokasi(`/admin/peminjaman/${loan.id}`)}
                     className="block w-full"
                   >
                     {loan.loanItems.length} unit
@@ -142,7 +145,7 @@ export default async function PeminjamanPage({
                 </td>
                 <td className="px-4 py-2 text-right">
                   <Link
-                    href={appendLokasiQuery(`/admin/peminjaman/${loan.id}`, params.lokasi)}
+                    href={withLokasi(`/admin/peminjaman/${loan.id}`)}
                     className="text-orange-400 hover:text-orange-300"
                   >
                     Buka →

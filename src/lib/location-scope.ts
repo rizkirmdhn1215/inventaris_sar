@@ -112,7 +112,8 @@ export function scopeWhere<T extends { locationId?: string }>(
   return { locationId: scope.locationId };
 }
 
-export function appendLokasiQuery(path: string, slug: string) {
+export function appendLokasiQuery(path: string, slug?: string | null) {
+  if (!slug) return path;
   const sep = path.includes("?") ? "&" : "?";
   return `${path}${sep}lokasi=${encodeURIComponent(slug)}`;
 }
