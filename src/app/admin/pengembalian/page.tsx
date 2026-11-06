@@ -23,6 +23,8 @@ export default async function PengembalianPage({
     orderBy: [{ createdAt: "desc" }],
   });
 
+  const activeApprovedCount = loans.filter((l) => l.status === "approved").length;
+
   return (
     <div className="space-y-4">
       <div>
@@ -31,6 +33,15 @@ export default async function PengembalianPage({
           Proses cek kondisi dan tutup sesi peminjaman.
         </p>
       </div>
+
+      {activeApprovedCount > 0 && (
+        <div className="flex items-center gap-2.5 p-3 rounded-xl border border-emerald-900/60 bg-emerald-950/30 text-xs">
+          <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+          <span className="text-emerald-200 font-medium">
+            Terdapat <strong className="text-white font-bold">{activeApprovedCount}</strong> sesi peminjaman aktif yang menunggu proses pengembalian (return) dan verifikasi kondisi unit.
+          </span>
+        </div>
+      )}
 
       {params.success ? (
         <p className="text-sm text-emerald-300 bg-emerald-950/40 border border-emerald-900/40 rounded-lg px-3 py-2">

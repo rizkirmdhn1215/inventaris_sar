@@ -12,6 +12,8 @@ import {
   Tags,
   Bell,
   MapPin,
+  ArrowDownToLine,
+  ArrowUpFromLine,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -19,6 +21,7 @@ import { appendLokasiQuery } from "@/lib/location-scope";
 import { AccountMenu } from "./account-menu";
 import { AppBrand } from "@/components/app-logo";
 import { AdminLocationBar } from "@/components/admin-location-bar";
+import { AdminNotifications } from "@/components/admin-notifications";
 import { Suspense } from "react";
 
 const navItems = [
@@ -26,6 +29,8 @@ const navItems = [
   { href: "/admin/lokasi", label: "Lokasi", icon: MapPin, superOnly: true },
   { href: "/admin/kategori", label: "Kategori", icon: Tags },
   { href: "/admin/barang", label: "Barang", icon: Package },
+  { href: "/admin/barang-masuk", label: "Barang Masuk", icon: ArrowDownToLine },
+  { href: "/admin/barang-keluar", label: "Barang Keluar", icon: ArrowUpFromLine },
   { href: "/admin/qr-generator", label: "QR Gen", icon: QrCode },
   { href: "/admin/peminjaman", label: "Pinjam", icon: ClipboardList },
   { href: "/admin/pengembalian", label: "Return", icon: Undo2 },
@@ -42,6 +47,8 @@ export function AdminShell({
   vapidPublicKey,
   isSuperAdmin,
   activeLocation,
+  initialPendingLoans = 0,
+  initialActiveReturns = 0,
   locations,
 }: {
   children: ReactNode;
@@ -54,10 +61,14 @@ export function AdminShell({
   vapidPublicKey: string;
   isSuperAdmin: boolean;
   activeLocation: { slug: string; name: string; type: string };
+  initialPendingLoans?: number;
+  initialActiveReturns?: number;
   locations: { id: string; slug: string; name: string; type: string }[];
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [pendingLoans, setPendingLoans] = useState(initialPendingLoans);
+  const [activeReturns, setActiveReturns] = useState(initialActiveReturns);
 
   function linkWithLokasi(path: string) {
     if (!isSuperAdmin || path === "/admin/lokasi") return path;
@@ -118,6 +129,14 @@ export function AdminShell({
         />
 
         <div className="flex items-center gap-2 sm:gap-3">
+          <AdminNotifications
+            lokasiSlug={activeLocation.slug}
+            onCountsUpdate={({ pendingLoans: pCount, activeReturns: rCount }) => {
+              setPendingLoans(pCount);
+              setActiveReturns(rCount);
+            }}
+          />
+
           {pushState !== "subscribed" &&
           pushState !== "unsupported" &&
           vapidPublicKey ? (
@@ -164,14 +183,28 @@ export function AdminShell({
                 <Link
                   key={item.href}
                   href={linkWithLokasi(item.href)}
-                  className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
+                  className={`flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors ${
                     isActive
-                      ? "bg-zinc-900 text-white"
+                      ? "bg-zinc-900 text-white font-medium"
                       : "text-zinc-400 hover:text-white hover:bg-zinc-900/60"
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
-                  <span>{item.label}</span>
+                  <div className="flex items-center gap-2">
+                    <Icon className="w-4 h-4" />
+                    <span>{item.label}</span>
+                  </div>
+
+                  {item.href === "/admin/peminjaman" && pendingLoans > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-orange-600 text-[10px] font-bold text-white shadow-sm animate-pulse">
+                      {pendingLoans}
+                    </span>
+                  )}
+
+                  {item.href === "/admin/pengembalian" && activeReturns > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-emerald-600 text-[10px] font-bold text-white shadow-sm">
+                      {activeReturns}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -194,19 +227,32 @@ export function AdminShell({
           <nav className="md:hidden border-t border-zinc-800 bg-zinc-950/95 backdrop-blur fixed bottom-0 inset-x-0 z-20">
             <div className="flex overflow-x-auto">
               {navItems.map((item) => {
+                if ("superOnly" in item && item.superOnly && !isSuperAdmin) return null;
                 const Icon = item.icon;
                 const isActive = pathname.startsWith(item.href);
                 return (
                   <Link
                     key={item.href}
-                    href={item.href}
-                    className="flex-1 min-w-[64px] flex flex-col items-center justify-center gap-1 py-2 text-[10px]"
+                    href={linkWithLokasi(item.href)}
+                    className="flex-1 min-w-[64px] flex flex-col items-center justify-center gap-1 py-2 text-[10px] relative"
                   >
-                    <Icon
-                      className={`w-4 h-4 ${
-                        isActive ? "text-orange-500" : "text-zinc-400"
-                      }`}
-                    />
+                    <div className="relative">
+                      <Icon
+                        className={`w-4 h-4 ${
+                          isActive ? "text-orange-500" : "text-zinc-400"
+                        }`}
+                      />
+                      {item.href === "/admin/peminjaman" && pendingLoans > 0 && (
+                        <span className="absolute -top-1 -right-2 px-1 rounded-full bg-orange-600 text-[8px] text-white font-bold leading-none py-0.5">
+                          {pendingLoans}
+                        </span>
+                      )}
+                      {item.href === "/admin/pengembalian" && activeReturns > 0 && (
+                        <span className="absolute -top-1 -right-2 px-1 rounded-full bg-emerald-600 text-[8px] text-white font-bold leading-none py-0.5">
+                          {activeReturns}
+                        </span>
+                      )}
+                    </div>
                     <span
                       className={
                         isActive ? "text-orange-500" : "text-zinc-400"

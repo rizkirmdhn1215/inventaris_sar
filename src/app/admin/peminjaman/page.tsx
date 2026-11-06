@@ -26,17 +26,25 @@ export default async function PeminjamanPage({
       ? params.status
       : null;
 
-  const loans = await db.loan.findMany({
-    where: {
-      locationId: scope.locationId,
-      ...(statusFilter ? { status: statusFilter } : {}),
-    },
-    include: {
-      loanItems: true,
-    },
-    orderBy: [{ createdAt: "desc" }],
-    take: 100,
-  });
+  const [loans, pendingCount] = await Promise.all([
+    db.loan.findMany({
+      where: {
+        locationId: scope.locationId,
+        ...(statusFilter ? { status: statusFilter } : {}),
+      },
+      include: {
+        loanItems: true,
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: 100,
+    }),
+    db.loan.count({
+      where: {
+        locationId: scope.locationId,
+        status: "pending",
+      },
+    }),
+  ]);
 
   const withLokasi = (url: string) =>
     params.lokasi ? appendLokasiQuery(url, params.lokasi) : url;
@@ -74,13 +82,18 @@ export default async function PeminjamanPage({
             <Link
               key={tab.value || "all"}
               href={href}
-              className={`px-4 py-2 text-sm whitespace-nowrap border-b-2 ${
+              className={`flex items-center gap-1.5 px-4 py-2 text-sm whitespace-nowrap border-b-2 transition-colors ${
                 isActive
-                  ? "border-orange-500 text-white"
+                  ? "border-orange-500 text-white font-medium"
                   : "border-transparent text-zinc-400 hover:text-zinc-200"
               }`}
             >
-              {tab.label}
+              <span>{tab.label}</span>
+              {tab.value === "pending" && pendingCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-orange-600 text-white text-[10px] font-bold">
+                  {pendingCount}
+                </span>
+              )}
             </Link>
           );
         })}

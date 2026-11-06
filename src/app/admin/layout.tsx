@@ -39,7 +39,11 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
     { adminId: session.adminId, role: admin.role },
     null
   );
-  const locations = await getActiveLocations();
+  const [locations, pendingLoansCount, activeReturnsCount] = await Promise.all([
+    getActiveLocations(),
+    db.loan.count({ where: { locationId: scope.locationId, status: "pending" } }),
+    db.loan.count({ where: { locationId: scope.locationId, status: "approved" } }),
+  ]);
 
   return (
     <AdminShell
@@ -52,6 +56,8 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
       vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""}
       isSuperAdmin={scope.isSuperAdmin}
       activeLocation={scope.activeLocation}
+      initialPendingLoans={pendingLoansCount}
+      initialActiveReturns={activeReturnsCount}
       locations={locations.map((l) => ({
         id: l.id,
         slug: l.slug,

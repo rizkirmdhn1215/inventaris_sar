@@ -20,8 +20,8 @@ function formatTanggalID(date: Date | string | null | undefined) {
 }
 
 const styles = StyleSheet.create({
-  page: { padding: 48, fontSize: 11, fontFamily: "Helvetica", color: "#0a0a0a" },
-  pageCompact: { padding: 40, fontSize: 11, fontFamily: "Helvetica", color: "#0a0a0a" },
+  page: { padding: 48, paddingBottom: 56, fontSize: 11, fontFamily: "Helvetica", color: "#0a0a0a" },
+  pageCompact: { padding: 40, paddingBottom: 48, fontSize: 11, fontFamily: "Helvetica", color: "#0a0a0a" },
   // A4 portrait is 595pt wide; page padding is 48pt. We use explicit page
   // width and negative margins so the letterhead image bleeds edge-to-edge.
   kopImage: {
@@ -76,6 +76,34 @@ const styles = StyleSheet.create({
   signCenterRow: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
   signCenterRowCompact: { flexDirection: "row", justifyContent: "center", marginTop: 12 },
   signCenterBox: { width: "40%", textAlign: "center" },
+  footer: {
+    position: "absolute",
+    bottom: 12,
+    left: 48,
+    right: 48,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderTopWidth: 0.5,
+    borderTopColor: "#d4d4d4",
+    paddingTop: 4,
+  },
+  footerCompact: {
+    position: "absolute",
+    bottom: 10,
+    left: 40,
+    right: 40,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderTopWidth: 0.5,
+    borderTopColor: "#d4d4d4",
+    paddingTop: 4,
+  },
+  footerText: {
+    fontSize: 8.5,
+    color: "#525252",
+  },
   watermark: {
     position: "absolute",
     top: "35%",
@@ -164,6 +192,7 @@ export function SuratPeminjamanDocument(props: SuratPeminjamanProps) {
     tdLast: compact ? styles.tdLastCompact : styles.tdLast,
     signGroup: compact ? styles.signGroupCompact : styles.signGroup,
     signCenterRow: compact ? styles.signCenterRowCompact : styles.signCenterRow,
+    footer: compact ? styles.footerCompact : styles.footer,
   };
 
   return (
@@ -277,7 +306,7 @@ export function SuratPeminjamanDocument(props: SuratPeminjamanProps) {
 
             {/* Petugas Gudang */}
             <View style={styles.signBox}>
-              <Text>Padang, {formatTanggalID(new Date())}</Text>
+              <Text>Padang, {formatTanggalID(props.expectedReturnDate)}</Text>
               <Text>Petugas Gudang,</Text>
               {props.adminSignatureDataUrl ? (
                 <Image
@@ -330,6 +359,19 @@ export function SuratPeminjamanDocument(props: SuratPeminjamanProps) {
               </View>
             </View>
           ) : null}
+        </View>
+
+        {/* Footer Dokumen - Tanggal Cetak di Kiri & Halaman di Kanan */}
+        <View style={s.footer} fixed>
+          <Text style={styles.footerText}>
+            Tanggal cetak: {formatTanggalID(new Date())}
+          </Text>
+          <Text
+            style={styles.footerText}
+            render={({ pageNumber, totalPages }) =>
+              `Halaman ${pageNumber} dari ${totalPages}`
+            }
+          />
         </View>
       </Page>
     </Document>

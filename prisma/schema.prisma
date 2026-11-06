@@ -91,11 +91,13 @@ model Item {
   type        String?
   kodeGudang  String?  @map("kode_gudang")
   imageUrl    String?  @map("image_url")
+  stok        Int      @default(0)
   createdAt   DateTime @default(now()) @map("created_at")
 
-  location Location      @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  category ItemCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  units    ItemUnit[]
+  location         Location      @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  category         ItemCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  units            ItemUnit[]
+  itemTransactions ItemTransaction[]
 
   @@map("items")
 }
@@ -188,6 +190,26 @@ model ConditionReport {
   itemUnit    ItemUnit    @relation(fields: [itemUnitId], references: [id])
 
   @@map("condition_reports")
+}
+
+// ─── Item Transactions (In/Out) ──────────────────────────
+model ItemTransaction {
+  id            String   @id @default(uuid()) @db.Uuid
+  locationId    String   @map("location_id") @db.Uuid
+  itemId        String   @map("item_id") @db.Uuid
+  type          String   // "in" | "out"
+  quantity      Int
+  referenceNo   String?  @map("reference_no")
+  source        String?  // Pengadaan Baru, Donasi, etc
+  notes         String?
+  recipient     String?  // Penerima (staff name)
+  sender        String?  // Pengirim (manual input)
+  qrCodes       String[] @map("qr_codes")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("item_transactions")
 }
 
 // ─── Push Notification Subscriptions ──────────────────────
