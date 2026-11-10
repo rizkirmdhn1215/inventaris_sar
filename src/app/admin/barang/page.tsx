@@ -5,6 +5,7 @@ import { upsertItemAction } from "./actions";
 import { STATUS_COLOR } from "@/lib/format";
 import { QrViewerButton } from "./qr-viewer";
 import { EditableItemRow } from "./editable-row";
+import { UnitConditionSelect } from "./unit-condition-select";
 import { requireAdminPageScope } from "@/lib/admin-page";
 import { appendLokasiQuery } from "@/lib/location-scope";
 
@@ -418,11 +419,10 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
                           </span>
                         </td>
                         <td className="px-4 py-2">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] ${STATUS_COLOR[unit.condition] ?? "bg-zinc-800 text-zinc-200"}`}
-                          >
-                            {unit.condition}
-                          </span>
+                          <UnitConditionSelect
+                            unitId={unit.id}
+                            initialCondition={unit.condition}
+                          />
                         </td>
                         <td className="px-4 py-2">
                           <QrViewerButton qrCode={unit.qrCode} itemName={unit.item.name} />

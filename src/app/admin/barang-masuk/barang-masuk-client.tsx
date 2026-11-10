@@ -13,6 +13,9 @@ import {
   FileSpreadsheet,
   RotateCcw,
   Package,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
 } from "lucide-react";
 import {
   submitBarangMasukAction,
@@ -22,6 +25,8 @@ import {
 import { Modal } from "@/components/modal";
 import { formatTanggalID } from "@/lib/format";
 import { printInventoryReport, exportInventoryToCsv } from "@/lib/inventory-report-print";
+import { SignaturePad } from "@/components/signature-pad";
+import { DEFAULT_PENGAWAS_GUDANG } from "@/lib/gudang-signatories";
 
 export type MasterItemOption = {
   id: string;
@@ -71,6 +76,48 @@ export type StaffOption = {
   jabatan: string;
 };
 
+function generateAutoDocNo(
+  dateStr: string,
+  typeCode: "M" | "K",
+  existingLogs: { date: string; noRef: string }[]
+): string {
+  const parts = (dateStr || "").split("-");
+  const now = new Date();
+  const year = Number(parts[0]) || now.getFullYear();
+  const month = Number(parts[1]) || now.getMonth() + 1;
+  const day = Number(parts[2]) || now.getDate();
+
+  const mm = String(month).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+
+  let maxSeq = 0;
+  for (const log of existingLogs) {
+    const [ly, lm] = (log.date || "").split("-").map(Number);
+    if (ly === year && lm === month && log.noRef && log.noRef !== "-") {
+      const match = log.noRef.trim().match(/^(\d+)\//);
+      if (match) {
+        const num = Number(match[1]);
+        if (num > maxSeq) maxSeq = num;
+      }
+    }
+  }
+
+  const nextSeq = String(maxSeq + 1).padStart(2, "0");
+  return `${nextSeq}/${typeCode}/PL.${mm}.${dd}/I/GDG SAR PDG-${year}`;
+}
+
+type DraftInboundItem = {
+  id: string;
+  mode: "existing" | "new";
+  itemId: string;
+  itemName: string;
+  categoryId: string;
+  categoryName: string;
+  qty: number;
+  notes: string;
+  qrCodes: string[];
+};
+
 export function BarangMasukClient({
   locationId,
   locationSlug,
@@ -101,16 +148,30 @@ export function BarangMasukClient({
   const [inDate, setInDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [qty, setQty] = useState(1);
   const [source, setSource] = useState("Pengadaan APBN/Basarnas");
-  const [noRef, setNoRef] = useState("");
+  const [noRef, setNoRef] = useState(() =>
+    generateAutoDocNo(new Date().toISOString().slice(0, 10), "M", initialLogs)
+  );
+  const [isCustomNoRef, setIsCustomNoRef] = useState(false);
   const [recipient, setRecipient] = useState(staffRoster[0]?.name ?? "");
   const [sender, setSender] = useState("");
   const [notes, setNotes] = useState("");
   const [previewQrs, setPreviewQrs] = useState<{ code: string; url: string }[]>([]);
+  const [draftItems, setDraftItems] = useState<DraftInboundItem[]>([]);
 
-  // Filter state
+  // State modal cetak surat BAST dari form (3 TTD: Pengirim, Petugas Gudang, Pengawas Gudang)
+  const [openBastModal, setOpenBastModal] = useState(false);
+  const [openConfirmSaveModal, setOpenConfirmSaveModal] = useState(false);
+  const [isBatchSaved, setIsBatchSaved] = useState(false);
+  const [bastSignTab, setBastSignTab] = useState<"pengirim" | "petugas" | "pengawas">("pengirim");
+  const [bastSenderName, setBastSenderName] = useState("");
+  const [bastSenderSignature, setBastSenderSignature] = useState<string | null>(null);
+
+  // Filter state (default: bulan & tahun sekarang)
   const [search, setSearch] = useState("");
-  const [filterMonth, setFilterMonth] = useState<string>("all");
-  const [filterYear, setFilterYear] = useState<string>("all");
+  const [filterMonth, setFilterMonth] = useState<string>(() => String(new Date().getMonth() + 1));
+  const [filterYear, setFilterYear] = useState<string>(() => String(new Date().getFullYear()));
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   // State edit log
   const [editingLog, setEditingLog] = useState<InLog | null>(null);
@@ -139,6 +200,16 @@ export function BarangMasukClient({
       staffRoster[0]?.nip ||
       "192329303313123"
   );
+  const [customPengawasName, setCustomPengawasName] = useState(
+    DEFAULT_PENGAWAS_GUDANG.name || "ALVIZAN Z., S.H."
+  );
+  const [customPengawasNip, setCustomPengawasNip] = useState(
+    DEFAULT_PENGAWAS_GUDANG.nip || "197312301998031003"
+  );
+  const [petugasSignature, setPetugasSignature] = useState<string | null>(null);
+  const [pengawasSignature, setPengawasSignature] = useState<string | null>(null);
+  const [activeSignTab, setActiveSignTab] = useState<"pengirim" | "petugas" | "pengawas">("pengirim");
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [openPrintModal, setOpenPrintModal] = useState(false);
 
   // Extract available years from logs + current year
@@ -152,9 +223,29 @@ export function BarangMasukClient({
     return Array.from(setYears).sort((a, b) => b - a);
   }, [logs]);
 
+  // Hitung otomatis displayId berformat BMS-YYYYMMDD-XXXX (reset ke 0001 tiap ganti tanggal)
+  const logsWithDisplayId = useMemo(() => {
+    const dailyTotal = new Map<string, number>();
+    for (const l of logs) {
+      dailyTotal.set(l.date, (dailyTotal.get(l.date) ?? 0) + 1);
+    }
+    const dailySeen = new Map<string, number>();
+    return logs.map((l) => {
+      const seen = dailySeen.get(l.date) ?? 0;
+      const total = dailyTotal.get(l.date) ?? 1;
+      const seq = total - seen;
+      dailySeen.set(l.date, seen + 1);
+      const ymd = (l.date || "").replace(/-/g, "");
+      return {
+        ...l,
+        displayId: `BMS-${ymd}-${String(seq).padStart(4, "0")}`,
+      };
+    });
+  }, [logs]);
+
   // Filtered logs
   const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
+    return logsWithDisplayId.filter((log) => {
       const d = new Date(log.date);
       const logYear = d.getFullYear();
       const logMonth = d.getMonth() + 1;
@@ -165,6 +256,7 @@ export function BarangMasukClient({
       if (search.trim()) {
         const q = search.toLowerCase();
         const match =
+          (log.displayId?.toLowerCase().includes(q) ?? false) ||
           log.itemName.toLowerCase().includes(q) ||
           log.category.toLowerCase().includes(q) ||
           log.noRef.toLowerCase().includes(q) ||
@@ -175,7 +267,7 @@ export function BarangMasukClient({
       }
       return true;
     });
-  }, [logs, filterYear, filterMonth, search]);
+  }, [logsWithDisplayId, filterYear, filterMonth, search]);
 
   const totalFilteredQty = useMemo(() => {
     return filteredLogs.reduce((sum, item) => sum + item.qty, 0);
@@ -196,43 +288,67 @@ export function BarangMasukClient({
     setSearch("");
     setFilterMonth("all");
     setFilterYear("all");
+    setCurrentPage(1);
   }
 
-  function handleConfirmPrint() {
-    let finalName = customSignerName.trim();
-    let finalNip = customSignerNip.trim();
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / pageSize));
+  const effectiveCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedLogs = useMemo(() => {
+    const start = (effectiveCurrentPage - 1) * pageSize;
+    return filteredLogs.slice(start, start + pageSize);
+  }, [filteredLogs, effectiveCurrentPage, pageSize]);
 
-    if (!finalName) {
+  async function handleConfirmPrint() {
+    let finalPetugasName = customSignerName.trim();
+    let finalPetugasNip = customSignerNip.trim();
+
+    if (!finalPetugasName) {
       const staff = staffRoster.find((s) => s.nip === selectedStaffNip);
-      finalName = staff ? staff.name : (staffRoster[0]?.name ?? "Petugas Gudang SAR");
-      finalNip = staff ? staff.nip : (staffRoster[0]?.nip ?? "");
+      finalPetugasName = staff ? staff.name : (staffRoster[0]?.name ?? "Petugas Gudang SAR");
+      finalPetugasNip = staff ? staff.nip : (staffRoster[0]?.nip ?? "");
     }
 
-    printInventoryReport({
-      title: "SURAT LAPORAN BARANG MASUK",
-      type: "in",
-      locationName,
-      periodLabel: activePeriodLabel,
-      rows: filteredLogs.map((l) => ({
-        id: l.id,
-        displayId: l.displayId,
-        date: l.date,
-        noRef: l.noRef,
-        itemName: l.itemName,
-        category: l.category,
-        qty: l.qty,
-        sourceOrReason: l.source,
-        sender: l.sender,
-        recipient: l.recipient,
-        notes: l.notes,
-        qrCodes: l.qrCodes,
-      })),
-      totalQty: totalFilteredQty,
-      signerName: finalName,
-      signerNip: finalNip,
-    });
+    const finalPengawasName = customPengawasName.trim() || DEFAULT_PENGAWAS_GUDANG.name;
+    const finalPengawasNip = customPengawasNip.trim() || DEFAULT_PENGAWAS_GUDANG.nip;
 
-    setOpenPrintModal(false);
+    setIsGeneratingPdf(true);
+    try {
+      const res = await fetch("/api/admin/inventory-report/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "in",
+          lokasi: locationSlug,
+          bulan: filterMonth,
+          tahun: filterYear,
+          search: search.trim() || undefined,
+          pengirim:
+            bastSenderName.trim() ||
+            filteredLogs.find((l) => l.sender?.trim() && l.sender.trim() !== "-")?.sender ||
+            "................................",
+          pengirimSignatureDataUrl: bastSenderSignature,
+          petugas: finalPetugasName,
+          nip: finalPetugasNip,
+          pengawas: finalPengawasName,
+          pengawasNip: finalPengawasNip,
+          petugasSignatureDataUrl: petugasSignature,
+          pengawasSignatureDataUrl: pengawasSignature,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Gagal membuat file PDF laporan");
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setOpenPrintModal(false);
+    } catch (err) {
+      alert("Terjadi kesalahan saat memproses PDF laporan: " + (err as Error).message);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
   }
 
   function handleExportCsv() {
@@ -317,90 +433,299 @@ export function BarangMasukClient({
     });
   }
 
-  async function generatePreview() {
-    const itemName = mode === "existing"
-      ? (items.find((i) => i.id === selectedItemId)?.name ?? "BARANG")
-      : (newItemName || "BARANG");
+  function buildCurrentFormItem(): DraftInboundItem {
+    const selectedMaster = items.find((i) => i.id === selectedItemId);
+    const itemName =
+      mode === "existing"
+        ? (selectedMaster?.name ?? "Barang")
+        : (newItemName.trim() || "Barang Baru");
+    const categoryName =
+      mode === "existing"
+        ? (selectedMaster?.categoryName ?? "-")
+        : (categories.find((c) => c.id === newItemCategory)?.name ?? "-");
 
-    const codeSlug = itemName.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10);
+    return {
+      id: `draft-${Date.now()}`,
+      mode,
+      itemId: selectedItemId,
+      itemName,
+      categoryId: newItemCategory,
+      categoryName,
+      qty: Math.max(1, qty),
+      notes: notes.trim(),
+      qrCodes: previewQrs.map((q) => q.code),
+    };
+  }
+
+  function getEffectiveFormItems(): DraftInboundItem[] {
+    if (draftItems.length > 0) return draftItems;
+    return [buildCurrentFormItem()];
+  }
+
+  function handleResetFormBatch() {
+    setIsBatchSaved(false);
+    setDraftItems([]);
+    setPreviewQrs([]);
+    setFeedback(null);
+    setQty(1);
+    setNotes("");
+    setIsCustomNoRef(false);
+    setNoRef(generateAutoDocNo(inDate, "M", logs));
+    if (mode === "new") setNewItemName("");
+  }
+
+  function handleAddDraftItem() {
+    if (mode === "new" && !newItemName.trim()) {
+      setFeedback({ type: "error", text: "Nama barang baru wajib diisi sebelum ditambahkan ke daftar." });
+      return;
+    }
+    setFeedback(null);
+    const entry = buildCurrentFormItem();
+    const codeSlug = entry.itemName.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10);
+    const locPrefix = (locationSlug || "SAR").toUpperCase();
+    if (entry.qrCodes.length === 0) {
+      entry.qrCodes = Array.from({ length: entry.qty }, (_, i) =>
+        `SAR-${locPrefix}-${codeSlug}-${String(i + 1).padStart(4, "0")}`
+      );
+    }
+    if (isBatchSaved) {
+      setIsBatchSaved(false);
+      setDraftItems([entry]);
+      setPreviewQrs([]);
+    } else {
+      setDraftItems((prev) => [...prev, entry]);
+    }
+    setQty(1);
+    setNotes("");
+    if (mode === "new") setNewItemName("");
+  }
+
+  function handleRemoveDraftItem(id: string) {
+    setDraftItems((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  function handleOpenBastModal() {
+    setBastSenderName(sender.trim() || "");
+    if (recipient) {
+      const matchedStaff = staffRoster.find((s) => s.name === recipient);
+      if (matchedStaff) {
+        setSelectedStaffNip(matchedStaff.nip);
+        setCustomSignerName(matchedStaff.name);
+        setCustomSignerNip(matchedStaff.nip);
+      } else {
+        setCustomSignerName(recipient);
+      }
+    }
+    setOpenBastModal(true);
+  }
+
+  async function handleConfirmBastPrint() {
+    let finalPetugasName = customSignerName.trim();
+    let finalPetugasNip = customSignerNip.trim();
+
+    if (!finalPetugasName) {
+      const staff = staffRoster.find((s) => s.nip === selectedStaffNip);
+      finalPetugasName = staff ? staff.name : (recipient || staffRoster[0]?.name || "Petugas Gudang SAR");
+      finalPetugasNip = staff ? staff.nip : (staffRoster[0]?.nip ?? "");
+    }
+
+    const finalPengawasName = customPengawasName.trim() || DEFAULT_PENGAWAS_GUDANG.name;
+    const finalPengawasNip = customPengawasNip.trim() || DEFAULT_PENGAWAS_GUDANG.nip;
+    const activeItems = getEffectiveFormItems();
+    const locPrefix = (locationSlug || "SAR").toUpperCase();
+
+    const customRows = activeItems.map((it, idx) => {
+      const codeSlug = it.itemName.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10);
+      const qrs =
+        it.qrCodes.length > 0
+          ? it.qrCodes
+          : Array.from({ length: it.qty }, (_, i) =>
+              `SAR-${locPrefix}-${codeSlug}-${String(i + 1).padStart(4, "0")}`
+            );
+
+      return {
+        id: it.id || String(idx + 1),
+        date: inDate,
+        noRef: noRef.trim() || "-",
+        itemName: it.itemName,
+        category: it.categoryName || "-",
+        qty: it.qty,
+        sourceOrReason: source,
+        sender: bastSenderName.trim() || sender.trim() || "-",
+        recipient: finalPetugasName,
+        notes: it.notes,
+        qrCodes: qrs,
+      };
+    });
+
+    setIsGeneratingPdf(true);
+    try {
+      const res = await fetch("/api/admin/inventory-report/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "in",
+          lokasi: locationSlug,
+          customTitle: "BERITA ACARA SERAH TERIMA BARANG MASUK",
+          customDocNumber: noRef.trim() || undefined,
+          customPeriodLabel: formatTanggalID(inDate),
+          customRows,
+          pengirim: bastSenderName.trim() || sender.trim() || "................................",
+          pengirimSignatureDataUrl: bastSenderSignature,
+          petugas: finalPetugasName,
+          nip: finalPetugasNip,
+          pengawas: finalPengawasName,
+          pengawasNip: finalPengawasNip,
+          petugasSignatureDataUrl: petugasSignature,
+          pengawasSignatureDataUrl: pengawasSignature,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Gagal membuat file PDF surat penerimaan");
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setOpenBastModal(false);
+    } catch (err) {
+      alert("Terjadi kesalahan saat memproses PDF surat: " + (err as Error).message);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  }
+
+  async function generatePreview() {
+    const activeItems = getEffectiveFormItems();
     const locPrefix = (locationSlug || "SAR").toUpperCase();
     const generated: { code: string; url: string }[] = [];
 
-    for (let i = 1; i <= qty; i++) {
-      const code = `SAR-${locPrefix}-${codeSlug}-${String(i).padStart(4, "0")}`;
-      const url = await QRCode.toDataURL(code, { width: 160, margin: 1 });
-      generated.push({ code, url });
+    for (const entry of activeItems) {
+      const codeSlug = entry.itemName.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10);
+      for (let i = 1; i <= entry.qty; i++) {
+        const code = `SAR-${locPrefix}-${codeSlug}-${String(i).padStart(4, "0")}`;
+        const url = await QRCode.toDataURL(code, { width: 160, margin: 1 });
+        generated.push({ code, url });
+      }
     }
     setPreviewQrs(generated);
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (isBatchSaved) return;
     setFeedback(null);
 
-    const formData = new FormData();
-    formData.set("locationId", locationId);
-    formData.set("mode", mode);
-    formData.set("itemId", selectedItemId);
-    formData.set("newItemName", newItemName);
-    formData.set("newItemCategory", newItemCategory);
-    formData.set("date", inDate);
-    formData.set("quantity", String(qty));
-    formData.set("source", source);
-    formData.set("referenceNo", noRef);
-    formData.set("recipient", recipient);
-    formData.set("sender", sender);
-    formData.set("notes", notes);
+    if (!inDate) {
+      setFeedback({ type: "error", text: "Tanggal masuk wajib diisi." });
+      return;
+    }
 
-    const itemName = mode === "existing"
-      ? (items.find((i) => i.id === selectedItemId)?.name ?? "Barang")
-      : newItemName;
-    const catName = mode === "existing"
-      ? (items.find((i) => i.id === selectedItemId)?.categoryName ?? "-")
-      : (categories.find((c) => c.id === newItemCategory)?.name ?? "-");
-
-    startTransition(async () => {
-      const res = await submitBarangMasukAction(formData);
-      if (res.error) {
-        setFeedback({ type: "error", text: res.error });
+    if (draftItems.length === 0) {
+      if (mode === "new" && !newItemName.trim()) {
+        setFeedback({ type: "error", text: "Nama barang baru wajib diisi." });
         return;
       }
+      if (mode === "existing" && !selectedItemId) {
+        setFeedback({ type: "error", text: "Silakan pilih master barang." });
+        return;
+      }
+      if (!Number.isInteger(qty) || qty < 1 || qty > 200) {
+        setFeedback({ type: "error", text: "Jumlah unit harus antara 1 sampai 200." });
+        return;
+      }
+    }
 
-      if (res.generatedCodes && res.generatedCodes.length > 0) {
-        const previewList = await Promise.all(
-          res.generatedCodes.map(async (code) => {
-            const url = await QRCode.toDataURL(code, { width: 160, margin: 1 });
-            return { code, url };
-          })
-        );
-        setPreviewQrs(previewList);
+    setOpenConfirmSaveModal(true);
+  }
 
-        const newLog: InLog = {
-          id: res.generatedCodes[0]?.slice(-8) || "NEW",
+  function handleConfirmSubmit() {
+    setOpenConfirmSaveModal(false);
+    setFeedback(null);
+
+    const itemsToSubmit = getEffectiveFormItems();
+
+    startTransition(async () => {
+      const allPreviewList: { code: string; url: string }[] = [];
+      const newLogsBatch: InLog[] = [];
+      const updatedDrafts: DraftInboundItem[] = [];
+
+      for (const entry of itemsToSubmit) {
+        const formData = new FormData();
+        formData.set("locationId", locationId);
+        formData.set("mode", entry.mode);
+        formData.set("itemId", entry.itemId);
+        formData.set("newItemName", entry.itemName);
+        formData.set("newItemCategory", entry.categoryId);
+        formData.set("date", inDate);
+        formData.set("quantity", String(entry.qty));
+        formData.set("source", source);
+        formData.set("referenceNo", noRef);
+        formData.set("recipient", recipient);
+        formData.set("sender", sender);
+        formData.set("notes", entry.notes);
+
+        const res = await submitBarangMasukAction(formData);
+        if (res.error) {
+          setFeedback({ type: "error", text: res.error });
+          return;
+        }
+
+        const codes = res.generatedCodes ?? [];
+        for (const code of codes) {
+          const url = await QRCode.toDataURL(code, { width: 160, margin: 1 });
+          allPreviewList.push({ code, url });
+        }
+
+        const resolvedName = res.item?.name ?? entry.itemName;
+        const resolvedCat = res.item?.categoryName ?? entry.categoryName;
+
+        newLogsBatch.push({
+          id: codes[0]?.slice(-8) || `NEW-${Date.now()}`,
           date: inDate,
           noRef: noRef || "-",
-          itemName: res.item?.name ?? itemName,
-          category: res.item?.categoryName ?? catName,
-          qty,
-          qrCodes: res.generatedCodes,
+          itemName: resolvedName,
+          category: resolvedCat,
+          qty: entry.qty,
+          qrCodes: codes,
           source,
           recipient,
           sender,
-          notes,
-        };
-        setLogs((prev) => [newLog, ...prev]);
-      }
-
-      if (res.item) {
-        setItems((prev) => {
-          if (prev.some((it) => it.id === res.item!.id)) return prev;
-          return [...prev, res.item!].sort((a, b) => a.name.localeCompare(b.name));
+          notes: entry.notes,
         });
-        setSelectedItemId(res.item.id);
+
+        updatedDrafts.push({
+          ...entry,
+          itemName: resolvedName,
+          categoryName: resolvedCat,
+          qrCodes: codes,
+        });
+
+        if (res.item) {
+          setItems((prev) => {
+            if (prev.some((it) => it.id === res.item!.id)) return prev;
+            return [...prev, res.item!].sort((a, b) => a.name.localeCompare(b.name));
+          });
+          setSelectedItemId(res.item.id);
+        }
       }
 
-      setFeedback({ type: "success", text: "Barang masuk dan unit QR berhasil disimpan di database serta stok Master Barang diperbarui." });
-      setNoRef("");
+      if (allPreviewList.length > 0) {
+        setPreviewQrs(allPreviewList);
+      }
+      if (newLogsBatch.length > 0) {
+        setLogs((prev) => [...newLogsBatch, ...prev]);
+      }
+      if (draftItems.length > 0) {
+        setDraftItems(updatedDrafts);
+      }
+      setIsBatchSaved(true);
+
+      setFeedback({
+        type: "success",
+        text: `${itemsToSubmit.length} jenis barang masuk dan unit QR berhasil disimpan di database. Tombol simpan dikunci agar tidak double input — silakan klik "Cetak Surat Penerimaan" atau "Input Penerimaan Baru".`,
+      });
       setNotes("");
       if (mode === "new") setNewItemName("");
     });
@@ -468,7 +793,7 @@ export function BarangMasukClient({
               <div>
                 <label className="block text-xs text-zinc-400 mb-1">Nama Barang Baru</label>
                 <input
-                  required
+                  required={draftItems.length === 0}
                   value={newItemName}
                   onChange={(e) => setNewItemName(e.target.value)}
                   placeholder="Contoh: Genset Honda 5kVA"
@@ -497,7 +822,13 @@ export function BarangMasukClient({
                 type="date"
                 required
                 value={inDate}
-                onChange={(e) => setInDate(e.target.value)}
+                onChange={(e) => {
+                  const nextDate = e.target.value;
+                  setInDate(nextDate);
+                  if (!isCustomNoRef && !isBatchSaved) {
+                    setNoRef(generateAutoDocNo(nextDate, "M", logs));
+                  }
+                }}
                 className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white focus:ring-2 focus:ring-orange-500"
               />
             </div>
@@ -527,12 +858,30 @@ export function BarangMasukClient({
               </select>
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">No. BAST / Dokumen</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs text-zinc-400">No. BAST / Dokumen</label>
+                {isCustomNoRef && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomNoRef(false);
+                      setNoRef(generateAutoDocNo(inDate, "M", logs));
+                    }}
+                    className="text-[10px] text-orange-400 hover:underline"
+                    title="Kembalikan ke nomor otomatis"
+                  >
+                    Reset Otomatis
+                  </button>
+                )}
+              </div>
               <input
                 value={noRef}
-                onChange={(e) => setNoRef(e.target.value)}
-                placeholder="BAST-2026/..."
-                className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white focus:ring-2 focus:ring-orange-500"
+                onChange={(e) => {
+                  setNoRef(e.target.value);
+                  setIsCustomNoRef(true);
+                }}
+                placeholder="01/M/PL.11.10/I/GDG SAR PDG-2026"
+                className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:ring-2 focus:ring-orange-500"
               />
             </div>
           </div>
@@ -565,7 +914,17 @@ export function BarangMasukClient({
           </div>
 
           <div>
-            <label className="block text-xs text-zinc-400 mb-1">Catatan Tambahan</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs text-zinc-400">Catatan Tambahan</label>
+              <button
+                type="button"
+                onClick={handleAddDraftItem}
+                className="inline-flex items-center gap-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-orange-400 hover:text-orange-300 px-2.5 py-1 text-xs font-medium transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Tambah Barang ke Daftar Surat
+              </button>
+            </div>
             <textarea
               rows={2}
               value={notes}
@@ -574,6 +933,64 @@ export function BarangMasukClient({
               className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white focus:ring-2 focus:ring-orange-500"
             />
           </div>
+
+          {draftItems.length > 0 && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 bg-zinc-900 border-b border-zinc-800">
+                <span className="text-xs font-semibold text-white flex items-center gap-2">
+                  <span>
+                    Daftar Barang Masuk ({draftItems.length} jenis ·{" "}
+                    {draftItems.reduce((sum, it) => sum + it.qty, 0)} unit)
+                  </span>
+                  {isBatchSaved && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                      Sudah Tersimpan ✓
+                    </span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleResetFormBatch}
+                  className="text-[11px] text-zinc-400 hover:text-red-400"
+                >
+                  {isBatchSaved ? "Bersihkan / Input Baru" : "Kosongkan Daftar"}
+                </button>
+              </div>
+              <div className="divide-y divide-zinc-800/60 max-h-48 overflow-y-auto">
+                {draftItems.map((it, idx) => (
+                  <div
+                    key={it.id}
+                    className="flex items-center justify-between gap-2 px-3 py-2 text-xs"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-white truncate">
+                        {idx + 1}. {it.itemName}{" "}
+                        <span className="text-zinc-400 font-normal">({it.categoryName})</span>
+                      </p>
+                      {it.notes && (
+                        <p className="text-[11px] text-zinc-400 truncate">Ket: {it.notes}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-900/60">
+                        {it.qty} unit
+                      </span>
+                      {!isBatchSaved && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDraftItem(it.id)}
+                          className="p-1 text-zinc-500 hover:text-red-400 transition-colors"
+                          title="Hapus dari daftar"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {feedback && (
             <div
@@ -587,7 +1004,7 @@ export function BarangMasukClient({
             </div>
           )}
 
-          <div className="flex items-center gap-3 pt-2">
+          <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               type="button"
               onClick={generatePreview}
@@ -597,22 +1014,47 @@ export function BarangMasukClient({
               Generate QR Tag
             </button>
             <button
-              type="submit"
-              disabled={isPending}
-              className="flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-5 py-2 text-sm font-medium transition-colors ml-auto"
+              type="button"
+              onClick={handleOpenBastModal}
+              className="flex items-center gap-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-100 px-4 py-2 text-sm font-medium transition-colors"
             >
-              {isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Menyimpan...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  Simpan Penerimaan
-                </>
-              )}
+              <Printer className="w-4 h-4 text-orange-400" />
+              Cetak Surat Penerimaan
             </button>
+            {isBatchSaved ? (
+              <div className="flex items-center gap-2 ml-auto">
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-800/80 border border-emerald-800/60 text-emerald-400 px-4 py-2 text-xs font-semibold">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Sudah Disimpan
+                </span>
+                <button
+                  type="button"
+                  onClick={handleResetFormBatch}
+                  className="flex items-center gap-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 text-sm font-medium transition-colors"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Input Penerimaan Baru
+                </button>
+              </div>
+            ) : (
+              <button
+                type="submit"
+                disabled={isPending}
+                className="flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-5 py-2 text-sm font-medium transition-colors ml-auto"
+              >
+                {isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    Simpan Penerimaan
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </form>
 
@@ -696,7 +1138,10 @@ export function BarangMasukClient({
               <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-500" />
               <input
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
                 placeholder="Cari barang / BAST / sumber / QR..."
                 className="w-full pl-9 pr-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
               />
@@ -705,7 +1150,10 @@ export function BarangMasukClient({
             <div className="sm:col-span-3">
               <select
                 value={filterMonth}
-                onChange={(e) => setFilterMonth(e.target.value)}
+                onChange={(e) => {
+                  setFilterMonth(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
               >
                 <option value="all">Semua Bulan</option>
@@ -720,7 +1168,10 @@ export function BarangMasukClient({
             <div className="sm:col-span-3">
               <select
                 value={filterYear}
-                onChange={(e) => setFilterYear(e.target.value)}
+                onChange={(e) => {
+                  setFilterYear(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
               >
                 <option value="all">Semua Tahun</option>
@@ -784,17 +1235,17 @@ export function BarangMasukClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/60">
-                {filteredLogs.length === 0 ? (
+                {paginatedLogs.length === 0 ? (
                   <tr>
                     <td colSpan={13} className="py-12 text-center text-zinc-500 text-sm">
                       Tidak ada riwayat transaksi barang masuk yang sesuai filter.
                     </td>
                   </tr>
                 ) : (
-                  filteredLogs.map((log, idx) => (
+                  paginatedLogs.map((log, idx) => (
                     <tr key={log.id} className="hover:bg-zinc-800/30 transition-colors">
                       <td className="px-3.5 py-3 text-center text-zinc-400 font-medium">
-                        {idx + 1}
+                        {(effectiveCurrentPage - 1) * pageSize + idx + 1}
                       </td>
                       <td className="px-3.5 py-3 whitespace-nowrap">
                         <span className="font-mono text-xs px-2 py-0.5 rounded bg-zinc-950 border border-zinc-800 text-zinc-300">
@@ -889,8 +1340,345 @@ export function BarangMasukClient({
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Footer */}
+          {filteredLogs.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-t border-zinc-800/80 bg-zinc-950/40 text-xs">
+              <span className="text-zinc-400">
+                Menampilkan{" "}
+                <strong className="text-white">
+                  {(effectiveCurrentPage - 1) * pageSize + 1}
+                </strong>{" "}
+                -{" "}
+                <strong className="text-white">
+                  {Math.min(effectiveCurrentPage * pageSize, filteredLogs.length)}
+                </strong>{" "}
+                dari <strong className="text-white">{filteredLogs.length}</strong> transaksi
+              </span>
+
+              <div className="flex items-center gap-1 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={effectiveCurrentPage <= 1}
+                  className="p-1.5 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  title="Halaman Sebelumnya"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="px-3 py-1 font-medium text-zinc-200">
+                  Halaman {effectiveCurrentPage} dari {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={effectiveCurrentPage >= totalPages}
+                  className="p-1.5 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  title="Halaman Berikutnya"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Modal Konfirmasi Simpan Penerimaan Barang (Ya / Tidak) */}
+      <Modal
+        open={openConfirmSaveModal}
+        onClose={() => setOpenConfirmSaveModal(false)}
+        title="Konfirmasi Simpan Penerimaan"
+        titleIcon={<CheckCircle2 className="w-5 h-5 text-emerald-400" />}
+      >
+        <div className="space-y-4 p-4 text-xs">
+          <p className="text-sm text-zinc-200">
+            Apakah Anda yakin ingin menyimpan penerimaan barang ini ke database?
+          </p>
+
+          {(() => {
+            const duplicates = getEffectiveFormItems().filter((it) =>
+              logs.some(
+                (l) =>
+                  l.date === inDate &&
+                  l.itemName.trim().toLowerCase() === it.itemName.trim().toLowerCase() &&
+                  l.qty === it.qty
+              )
+            );
+            if (duplicates.length === 0) return null;
+            return (
+              <div className="rounded-xl bg-amber-950/60 border border-amber-800 p-3 text-amber-200 space-y-1">
+                <p className="font-semibold text-amber-300">
+                  Peringatan Kemungkinan Input Ganda (Double Input):
+                </p>
+                <p>
+                  Barang dengan nama, jumlah unit, dan tanggal yang sama sudah tercatat di riwayat (
+                  {duplicates.map((d) => `${d.itemName}: ${d.qty} unit`).join(", ")}). Pastikan Anda
+                  belum menyimpan transaksi ini sebelumnya.
+                </p>
+              </div>
+            );
+          })()}
+
+          <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3 space-y-2">
+            <div className="flex justify-between">
+              <span className="text-zinc-400">Tanggal Masuk:</span>
+              <strong className="text-white">{formatTanggalID(inDate)}</strong>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-400">Sumber Pengadaan:</span>
+              <span className="text-zinc-200">{source}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-400">Penerima / Pengirim:</span>
+              <span className="text-zinc-200">
+                {recipient || "-"} / {sender.trim() || "-"}
+              </span>
+            </div>
+            <div className="pt-1.5 border-t border-zinc-800/80">
+              <p className="text-zinc-400 mb-1">Rincian Barang:</p>
+              <div className="space-y-1 max-h-28 overflow-y-auto">
+                {getEffectiveFormItems().map((it, idx) => (
+                  <div key={it.id} className="flex justify-between text-zinc-200">
+                    <span className="truncate">
+                      {idx + 1}. {it.itemName} ({it.categoryName})
+                    </span>
+                    <strong className="text-emerald-400 shrink-0 ml-2">{it.qty} unit</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setOpenConfirmSaveModal(false)}
+              className="px-4 py-2 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium text-zinc-300 hover:text-white transition-colors"
+            >
+              Tidak
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmSubmit}
+              disabled={isPending}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-semibold text-white transition-colors"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Ya, Simpan Barang</span>
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Cetak Surat Penerimaan Barang (BAST) dari Form - 3 TTD */}
+      <Modal
+        open={openBastModal}
+        onClose={() => setOpenBastModal(false)}
+        title="Cetak Surat Penerimaan Barang Masuk"
+        titleIcon={<Printer className="w-5 h-5 text-orange-400" />}
+      >
+        <div className="space-y-4 p-4 text-xs">
+          <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3 space-y-2">
+            <div className="flex justify-between">
+              <span className="text-zinc-400">Tanggal Masuk:</span>
+              <strong className="text-white">{formatTanggalID(inDate)}</strong>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-400">No. BAST / Dokumen:</span>
+              <span className="text-zinc-200 font-mono">{noRef.trim() || "Otomatis"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-400">Sumber Pengadaan:</span>
+              <span className="text-zinc-200">{source}</span>
+            </div>
+            <div className="pt-1.5 border-t border-zinc-800/80">
+              <p className="text-zinc-400 mb-1">Isi Tabel Barang Masuk:</p>
+              <div className="space-y-1 max-h-28 overflow-y-auto">
+                {getEffectiveFormItems().map((it, idx) => (
+                  <div key={it.id} className="flex justify-between text-zinc-200">
+                    <span className="truncate">
+                      {idx + 1}. {it.itemName} ({it.categoryName})
+                    </span>
+                    <strong className="text-emerald-400 shrink-0 ml-2">{it.qty} unit</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 3 Tab Pilihan Penandatangan: Pengirim, Petugas Gudang, Pengawas Gudang */}
+          <div className="flex gap-1 p-1 bg-zinc-950 rounded-lg border border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setBastSignTab("pengirim")}
+              className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${
+                bastSignTab === "pengirim"
+                  ? "bg-orange-600 text-white"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Pengirim {bastSenderSignature ? "✓" : ""}
+            </button>
+            <button
+              type="button"
+              onClick={() => setBastSignTab("petugas")}
+              className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${
+                bastSignTab === "petugas"
+                  ? "bg-orange-600 text-white"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Petugas Gudang {petugasSignature ? "✓" : ""}
+            </button>
+            <button
+              type="button"
+              onClick={() => setBastSignTab("pengawas")}
+              className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${
+                bastSignTab === "pengawas"
+                  ? "bg-orange-600 text-white"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Pengawas Gudang {pengawasSignature ? "✓" : ""}
+            </button>
+          </div>
+
+          {bastSignTab === "pengirim" ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] text-zinc-400 mb-1">
+                  Nama Pengirim / Pihak Penyerah
+                </label>
+                <input
+                  value={bastSenderName}
+                  onChange={(e) => setBastSenderName(e.target.value)}
+                  placeholder="Nama Lengkap Pengirim / Pihak Penyerah"
+                  className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                />
+              </div>
+              <div className="pt-1">
+                <SignaturePad
+                  label="Tanda Tangan Pengirim (Opsional)"
+                  initialDataUrl={bastSenderSignature}
+                  onDataUrlChange={setBastSenderSignature}
+                />
+              </div>
+            </div>
+          ) : bastSignTab === "petugas" ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                  Petugas Gudang / Penerima
+                </label>
+                <select
+                  value={selectedStaffNip}
+                  onChange={(e) => {
+                    setSelectedStaffNip(e.target.value);
+                    const st = staffRoster.find((s) => s.nip === e.target.value);
+                    if (st) {
+                      setCustomSignerName(st.name);
+                      setCustomSignerNip(st.nip);
+                    }
+                  }}
+                  className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                >
+                  {staffRoster.map((s) => (
+                    <option key={s.nip} value={s.nip}>
+                      {s.name} ({s.jabatan})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] text-zinc-400 mb-1">Nama Petugas Gudang</label>
+                  <input
+                    value={customSignerName}
+                    onChange={(e) => setCustomSignerName(e.target.value)}
+                    placeholder="Nama Lengkap Petugas"
+                    className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-zinc-400 mb-1">NIP Petugas Gudang</label>
+                  <input
+                    value={customSignerNip}
+                    onChange={(e) => setCustomSignerNip(e.target.value)}
+                    placeholder="NIP. ..."
+                    className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                </div>
+              </div>
+              <div className="pt-1">
+                <SignaturePad
+                  label="Tanda Tangan Petugas Gudang (Opsional)"
+                  initialDataUrl={petugasSignature}
+                  onDataUrlChange={setPetugasSignature}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] text-zinc-400 mb-1">Nama Pengawas Gudang</label>
+                  <input
+                    value={customPengawasName}
+                    onChange={(e) => setCustomPengawasName(e.target.value)}
+                    placeholder="Nama Pengawas Gudang"
+                    className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-zinc-400 mb-1">NIP Pengawas Gudang</label>
+                  <input
+                    value={customPengawasNip}
+                    onChange={(e) => setCustomPengawasNip(e.target.value)}
+                    placeholder="NIP. ..."
+                    className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                </div>
+              </div>
+              <div className="pt-1">
+                <SignaturePad
+                  label="Tanda Tangan Pengawas Gudang (Opsional)"
+                  initialDataUrl={pengawasSignature}
+                  onDataUrlChange={setPengawasSignature}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setOpenBastModal(false)}
+              className="px-3 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-white"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmBastPrint}
+              disabled={isGeneratingPdf}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-xs font-semibold text-white transition-colors"
+            >
+              {isGeneratingPdf ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Memproses PDF...</span>
+                </>
+              ) : (
+                <>
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Buka Dokumen Cetak</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Modal Opsi Petugas Siaga & Cetak Laporan */}
       <Modal
@@ -915,55 +1703,151 @@ export function BarangMasukClient({
             </div>
           </div>
 
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                Petugas Gudang yang Bertugas / Siaga
-              </label>
-              <select
-                value={selectedStaffNip}
-                onChange={(e) => {
-                  setSelectedStaffNip(e.target.value);
-                  const st = staffRoster.find((s) => s.nip === e.target.value);
-                  if (st) {
-                    setCustomSignerName(st.name);
-                    setCustomSignerNip(st.nip);
-                  }
-                }}
-                className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
-              >
-                {staffRoster.map((s) => (
-                  <option key={s.nip} value={s.nip}>
-                    {s.name} ({s.jabatan})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-              <div>
-                <label className="block text-[11px] text-zinc-400 mb-1">Nama Petugas Gudang</label>
-                <input
-                  value={customSignerName}
-                  onChange={(e) => setCustomSignerName(e.target.value)}
-                  placeholder="Nama Lengkap Petugas"
-                  className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] text-zinc-400 mb-1">NIP Petugas Gudang</label>
-                <input
-                  value={customSignerNip}
-                  onChange={(e) => setCustomSignerNip(e.target.value)}
-                  placeholder="NIP. ..."
-                  className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
-                />
-              </div>
-            </div>
-            <p className="text-[11px] text-zinc-500 italic">
-              * Nama dan NIP di atas akan dicantumkan pada bagian tanda tangan Petugas Gudang di dokumen cetak.
-            </p>
+          {/* Tab Pilihan Penandatangan */}
+          <div className="flex gap-1 p-1 bg-zinc-950 rounded-lg border border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setActiveSignTab("pengirim")}
+              className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${
+                activeSignTab === "pengirim"
+                  ? "bg-orange-600 text-white"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Pengirim {bastSenderSignature ? "✓" : ""}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSignTab("petugas")}
+              className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${
+                activeSignTab === "petugas"
+                  ? "bg-orange-600 text-white"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Petugas Gudang {petugasSignature ? "✓" : ""}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSignTab("pengawas")}
+              className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${
+                activeSignTab === "pengawas"
+                  ? "bg-orange-600 text-white"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Pengawas Gudang {pengawasSignature ? "✓" : ""}
+            </button>
           </div>
+
+          {activeSignTab === "pengirim" ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] text-zinc-400 mb-1">
+                  Nama Pengirim / Pihak Penyerah
+                </label>
+                <input
+                  value={bastSenderName}
+                  onChange={(e) => setBastSenderName(e.target.value)}
+                  placeholder="Nama Lengkap Pengirim (Kosongkan untuk ambil dari riwayat)"
+                  className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                />
+              </div>
+              <div className="pt-1">
+                <SignaturePad
+                  label="Tanda Tangan Pengirim (Opsional)"
+                  initialDataUrl={bastSenderSignature}
+                  onDataUrlChange={setBastSenderSignature}
+                />
+              </div>
+            </div>
+          ) : activeSignTab === "petugas" ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                  Petugas Gudang yang Bertugas / Siaga
+                </label>
+                <select
+                  value={selectedStaffNip}
+                  onChange={(e) => {
+                    setSelectedStaffNip(e.target.value);
+                    const st = staffRoster.find((s) => s.nip === e.target.value);
+                    if (st) {
+                      setCustomSignerName(st.name);
+                      setCustomSignerNip(st.nip);
+                    }
+                  }}
+                  className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                >
+                  {staffRoster.map((s) => (
+                    <option key={s.nip} value={s.nip}>
+                      {s.name} ({s.jabatan})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] text-zinc-400 mb-1">Nama Petugas Gudang</label>
+                  <input
+                    value={customSignerName}
+                    onChange={(e) => setCustomSignerName(e.target.value)}
+                    placeholder="Nama Lengkap Petugas"
+                    className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-zinc-400 mb-1">NIP Petugas Gudang</label>
+                  <input
+                    value={customSignerNip}
+                    onChange={(e) => setCustomSignerNip(e.target.value)}
+                    placeholder="NIP. ..."
+                    className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-1">
+                <SignaturePad
+                  label="Tanda Tangan Petugas Gudang (Opsional)"
+                  initialDataUrl={petugasSignature}
+                  onDataUrlChange={setPetugasSignature}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] text-zinc-400 mb-1">Nama Pengawas Gudang</label>
+                  <input
+                    value={customPengawasName}
+                    onChange={(e) => setCustomPengawasName(e.target.value)}
+                    placeholder="Nama Pengawas Gudang"
+                    className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-zinc-400 mb-1">NIP Pengawas Gudang</label>
+                  <input
+                    value={customPengawasNip}
+                    onChange={(e) => setCustomPengawasNip(e.target.value)}
+                    placeholder="NIP. ..."
+                    className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-1">
+                <SignaturePad
+                  label="Tanda Tangan Pengawas Gudang (Opsional)"
+                  initialDataUrl={pengawasSignature}
+                  onDataUrlChange={setPengawasSignature}
+                />
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
             <button
@@ -976,10 +1860,20 @@ export function BarangMasukClient({
             <button
               type="button"
               onClick={handleConfirmPrint}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-500 text-xs font-semibold text-white transition-colors"
+              disabled={isGeneratingPdf}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-xs font-semibold text-white transition-colors"
             >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Buka Dokumen Cetak</span>
+              {isGeneratingPdf ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Memproses PDF...</span>
+                </>
+              ) : (
+                <>
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Buka Dokumen Cetak</span>
+                </>
+              )}
             </button>
           </div>
         </div>

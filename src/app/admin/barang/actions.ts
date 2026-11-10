@@ -83,3 +83,27 @@ export async function adjustMaintenanceAction(
     return { error: (e as Error).message };
   }
 }
+
+export async function updateUnitConditionAction(
+  formData: FormData
+): Promise<InventoryActionResult> {
+  const unitId = String(formData.get("unitId") ?? "").trim();
+  const condition = String(formData.get("condition") ?? "").trim();
+
+  if (!unitId) return { error: "ID unit tidak valid." };
+  if (!["good", "damaged", "lost"].includes(condition)) {
+    return { error: "Kondisi tidak valid." };
+  }
+
+  try {
+    await db.itemUnit.update({
+      where: { id: unitId },
+      data: { condition },
+    });
+    revalidatePath("/admin/barang");
+    return { success: "Kondisi unit diperbarui." };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+

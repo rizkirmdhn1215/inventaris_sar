@@ -141,7 +141,7 @@ export function printInventoryReport(options: {
   <style>
     @page {
       size: A4 portrait;
-      margin: 14mm 14mm 16mm 14mm;
+      margin: 0;
     }
 
     * {
@@ -476,15 +476,15 @@ export function printInventoryReport(options: {
         width: 100% !important;
         min-height: auto !important;
         margin: 0 !important;
-        padding: 0 !important;
+        padding: 14mm 14mm 16mm 14mm !important;
         box-shadow: none !important;
         border-radius: 0 !important;
       }
       .footer {
         position: fixed;
-        bottom: 8px;
-        left: 0;
-        right: 0;
+        bottom: 12mm;
+        left: 14mm;
+        right: 14mm;
       }
       * {
         -webkit-print-color-adjust: exact;

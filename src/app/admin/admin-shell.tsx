@@ -29,8 +29,8 @@ const navItems = [
   { href: "/admin/lokasi", label: "Lokasi", icon: MapPin, superOnly: true },
   { href: "/admin/kategori", label: "Kategori", icon: Tags },
   { href: "/admin/barang", label: "Barang", icon: Package },
-  { href: "/admin/barang-masuk", label: "Barang Masuk", icon: ArrowDownToLine },
-  { href: "/admin/barang-keluar", label: "Barang Keluar", icon: ArrowUpFromLine },
+  { href: "/admin/barang-masuk", label: "Barang Masuk", icon: ArrowDownToLine, kppOnly: true },
+  { href: "/admin/barang-keluar", label: "Barang Keluar", icon: ArrowUpFromLine, kppOnly: true },
   { href: "/admin/qr-generator", label: "QR Gen", icon: QrCode },
   { href: "/admin/peminjaman", label: "Pinjam", icon: ClipboardList },
   { href: "/admin/pengembalian", label: "Return", icon: Undo2 },
@@ -69,6 +69,7 @@ export function AdminShell({
   const searchParams = useSearchParams();
   const [pendingLoans, setPendingLoans] = useState(initialPendingLoans);
   const [activeReturns, setActiveReturns] = useState(initialActiveReturns);
+  const isKpp = activeLocation.slug === "kpp-padang" || activeLocation.type === "kpp";
 
   function linkWithLokasi(path: string) {
     if (!isSuperAdmin || path === "/admin/lokasi") return path;
@@ -177,6 +178,7 @@ export function AdminShell({
           <nav className="flex-1 py-4 space-y-1 px-2">
             {navItems.map((item) => {
               if ("superOnly" in item && item.superOnly && !isSuperAdmin) return null;
+              if ("kppOnly" in item && item.kppOnly && !isKpp) return null;
               const Icon = item.icon;
               const isActive = pathname.startsWith(item.href);
               return (
@@ -228,6 +230,7 @@ export function AdminShell({
             <div className="flex overflow-x-auto">
               {navItems.map((item) => {
                 if ("superOnly" in item && item.superOnly && !isSuperAdmin) return null;
+                if ("kppOnly" in item && item.kppOnly && !isKpp) return null;
                 const Icon = item.icon;
                 const isActive = pathname.startsWith(item.href);
                 return (
