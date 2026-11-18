@@ -5,11 +5,13 @@ import { PenLine, Upload, X, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 
 interface SignaturePadProps {
   /** The hidden input `name` that will carry the base64 PNG data URL */
-  inputName: string;
+  inputName?: string;
   /** Label shown above the pad */
   label: string;
   /** Initial data URL (e.g. when re-editing an approved loan) */
   initialDataUrl?: string | null;
+  /** Callback when signature image data changes */
+  onDataUrlChange?: (dataUrl: string | null) => void;
 }
 
 type Tab = "draw" | "upload";
@@ -18,11 +20,20 @@ export function SignaturePad({
   inputName,
   label,
   initialDataUrl,
+  onDataUrlChange,
 }: SignaturePadProps) {
   const [tab, setTab] = useState<Tab>("draw");
   const [dataUrl, setDataUrl] = useState<string | null>(initialDataUrl ?? null);
   const [scale, setScale] = useState(100); // percentage
   const [isDrawing, setIsDrawing] = useState(false);
+
+  const applyDataUrl = useCallback(
+    (newUrl: string | null) => {
+      setDataUrl(newUrl);
+      onDataUrlChange?.(newUrl);
+    },
+    [onDataUrlChange]
+  );
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
@@ -58,7 +69,7 @@ export function SignaturePad({
     }
     if (maxX < minX || maxY < minY) {
       // nothing drawn
-      setDataUrl(null);
+      applyDataUrl(null);
       return;
     }
     const pad = 6;
@@ -72,8 +83,8 @@ export function SignaturePad({
     crop.width = w;
     crop.height = h;
     crop.getContext("2d")!.drawImage(canvas, minX, minY, w, h, 0, 0, w, h);
-    setDataUrl(crop.toDataURL("image/png"));
-  }, []);
+    applyDataUrl(crop.toDataURL("image/png"));
+  }, [applyDataUrl]);
 
   // ─── pointer drawing ───────────────────────────────────────────────────────
 
@@ -156,7 +167,7 @@ export function SignaturePad({
 
   function handleClear() {
     clearCanvas();
-    setDataUrl(null);
+    applyDataUrl(null);
   }
 
   // ─── init canvas background ────────────────────────────────────────────────
@@ -296,12 +307,16 @@ export function SignaturePad({
       )}
 
       {/* Hidden inputs that the server action reads */}
-      <input type="hidden" name={inputName} value={dataUrl ?? ""} />
-      <input
-        type="hidden"
-        name={`${inputName}Scale`}
-        value={dataUrl ? String(scale) : ""}
-      />
+      {inputName ? (
+        <>
+          <input type="hidden" name={inputName} value={dataUrl ?? ""} />
+          <input
+            type="hidden"
+            name={`${inputName}Scale`}
+            value={dataUrl ? String(scale) : ""}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

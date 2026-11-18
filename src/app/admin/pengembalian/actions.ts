@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { verifySession } from "@/lib/auth/session";
 import { uploadBufferToMinio } from "@/lib/minio";
+import { sendPushToLocationAdmins } from "@/lib/push";
 
 export async function submitReturnAction(formData: FormData) {
   const loanId = String(formData.get("loanId") ?? "");
@@ -106,7 +107,7 @@ export async function submitReturnAction(formData: FormData) {
       await tx.itemUnit.update({
         where: { id: report.itemUnitId },
         data: {
-          status: "available",
+          status: report.conditionResult === "good" ? "available" : report.conditionResult,
           condition: report.conditionResult,
         },
       });
@@ -119,5 +120,22 @@ export async function submitReturnAction(formData: FormData) {
   });
 
   revalidatePath("/admin/pengembalian");
+  revalidatePath("/admin/barang");
+  revalidatePath("/admin/dashboard");
+  
+  // Send push notification for return processed
+  const returnedLoan = await db.loan.findUnique({
+    where: { id: loanId },
+    select: { locationId: true, borrowerName: true, borrowerDivision: true },
+  });
+  
+  if (returnedLoan) {
+    sendPushToLocationAdmins(returnedLoan.locationId, {
+      title: "Pengembalian Diproses",
+      body: `Peminjaman dari ${returnedLoan.borrowerName} (${returnedLoan.borrowerDivision}) telah diproses pengembalian.`,
+      url: `/admin/pengembalian/${loanId}`,
+    }).catch(() => {});
+  }
+
   redirect("/admin/pengembalian?success=returned");
 }

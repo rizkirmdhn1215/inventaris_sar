@@ -9,6 +9,7 @@ import { uploadBufferToMinio } from "@/lib/minio";
 import { DEFAULT_PENGAWAS_GUDANG } from "@/lib/gudang-signatories";
 import { groupLoanItemsForPdf } from "@/lib/inventory";
 import { allocateAvailableUnits } from "@/lib/inventory";
+import { sendPushToLocationAdmins } from "@/lib/push";
 
 export async function approveLoanAction(formData: FormData) {
   const loanId = String(formData.get("loanId") ?? "");
@@ -158,6 +159,14 @@ export async function approveLoanAction(formData: FormData) {
   });
 
   revalidatePath("/admin/peminjaman");
+  
+  // Send push notification for approved loan
+  sendPushToLocationAdmins(loan!.locationId, {
+    title: "Peminjaman Disetujui",
+    body: `Peminjaman dari ${loan!.borrowerName} (${loan!.borrowerDivision}) telah disetujui.`,
+    url: `/admin/peminjaman/${loanId}`,
+  }).catch(() => {});
+
   redirect(`/admin/peminjaman/${loanId}?success=approved`);
 }
 

@@ -1,12 +1,24 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { Package, Warehouse, ArrowRightLeft, Plus, AlertTriangle, Wrench, FileDown } from "lucide-react";
+import {
+  Package,
+  Warehouse,
+  ArrowRightLeft,
+  Plus,
+  AlertTriangle,
+  Wrench,
+  FileDown,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { upsertItemAction } from "./actions";
 import { STATUS_COLOR } from "@/lib/format";
 import { QrViewerButton } from "./qr-viewer";
 import { EditableItemRow } from "./editable-row";
+import { UnitConditionSelect } from "./unit-condition-select";
 import { requireAdminPageScope } from "@/lib/admin-page";
-import { appendLokasiQuery } from "@/lib/location-scope";
+
+const UNITS_PER_PAGE = 50;
 
 type BarangPageProps = {
   searchParams: Promise<{
@@ -16,6 +28,7 @@ type BarangPageProps = {
     q?: string;
     merk?: string;
     category?: string;
+    page?: string;
   }>;
 };
 
@@ -36,11 +49,25 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
   const searchQ = (params.q ?? "").trim();
   const searchMerk = (params.merk ?? "").trim();
   const searchCategory = (params.category ?? "").trim();
+  const requestedPage = Math.max(1, Number.parseInt(params.page ?? "1", 10) || 1);
 
-  const unitsWhere =
-    activeStatus === "damaged"
-      ? { condition: { in: ["damaged", "lost"] }, item: { locationId: locId } }
-      : { status: activeStatus, item: { locationId: locId } };
+  const unitsWhere = {
+    ...(activeStatus === "damaged"
+      ? { condition: { in: ["damaged", "lost"] }, status: { not: "retired" } }
+      : { status: activeStatus }),
+    item: {
+      locationId: locId,
+      ...(tab === "units" && searchCategory ? { categoryId: searchCategory } : {}),
+    },
+    ...(tab === "units" && searchQ
+      ? {
+          OR: [
+            { qrCode: { contains: searchQ, mode: "insensitive" as const } },
+            { item: { name: { contains: searchQ, mode: "insensitive" as const } } },
+          ],
+        }
+      : {}),
+  };
 
   const masterWhere = {
     locationId: locId,
@@ -64,22 +91,21 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
     borrowedCount,
     damagedCount,
     maintenanceCount,
-    units,
+    filteredUnitsCount,
     items,
     categories,
   ] = await Promise.all([
     db.itemUnit.count({ where: { status: "available", item: { locationId: locId } } }),
     db.itemUnit.count({ where: { status: "borrowed", item: { locationId: locId } } }),
     db.itemUnit.count({
-      where: { condition: { in: ["damaged", "lost"] }, item: { locationId: locId } },
+      where: {
+        condition: { in: ["damaged", "lost"] },
+        status: { not: "retired" },
+        item: { locationId: locId },
+      },
     }),
     db.itemUnit.count({ where: { status: "maintenance", item: { locationId: locId } } }),
-    db.itemUnit.findMany({
-      where: unitsWhere,
-      include: { item: { include: { category: true } } },
-      orderBy: [{ createdAt: "desc" }],
-      take: 100,
-    }),
+    tab === "units" ? db.itemUnit.count({ where: unitsWhere }) : Promise.resolve(0),
     db.item.findMany({
       where: masterWhere,
       include: {
@@ -97,6 +123,23 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
     }),
   ]);
 
+  const totalUnitPages = Math.max(1, Math.ceil(filteredUnitsCount / UNITS_PER_PAGE));
+  const currentUnitPage = Math.min(requestedPage, totalUnitPages);
+
+  const units =
+    tab === "units"
+      ? await db.itemUnit.findMany({
+          where: unitsWhere,
+          include: { item: { include: { category: true } } },
+          orderBy: [{ createdAt: "desc" }, { qrCode: "asc" }],
+          skip: (currentUnitPage - 1) * UNITS_PER_PAGE,
+          take: UNITS_PER_PAGE,
+        })
+      : [];
+
+  const unitStartIndex = filteredUnitsCount === 0 ? 0 : (currentUnitPage - 1) * UNITS_PER_PAGE + 1;
+  const unitEndIndex = Math.min(currentUnitPage * UNITS_PER_PAGE, filteredUnitsCount);
+
   const masterFilterQs = (extra: Record<string, string>) => {
     const q = new URLSearchParams({ tab: "master", lokasi: scope.activeLocation.slug, ...extra });
     if (searchQ) q.set("q", searchQ);
@@ -105,8 +148,26 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
     return q.toString();
   };
 
-  const unitsTabHref = (status: string) =>
-    appendLokasiQuery(`/admin/barang?tab=units&status=${status}`, scope.activeLocation.slug);
+  const unitsPageHref = (overrides?: {
+    status?: string;
+    page?: number;
+    q?: string;
+    category?: string;
+  }) => {
+    const sp = new URLSearchParams();
+    sp.set("tab", "units");
+    sp.set("status", overrides?.status ?? activeStatus);
+    sp.set("lokasi", scope.activeLocation.slug);
+    const qVal = overrides && "q" in overrides ? overrides.q : searchQ;
+    const catVal = overrides && "category" in overrides ? overrides.category : searchCategory;
+    const pageVal = overrides?.page ?? 1;
+    if (qVal) sp.set("q", qVal);
+    if (catVal) sp.set("category", catVal);
+    if (pageVal > 1) sp.set("page", String(pageVal));
+    return `/admin/barang?${sp.toString()}`;
+  };
+
+  const unitsTabHref = (status: string) => unitsPageHref({ status, page: 1 });
 
   return (
     <div className="space-y-6">
@@ -119,7 +180,7 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
 
       <div className="flex gap-2 border-b border-zinc-800">
         <Link
-          href={unitsTabHref("available")}
+          href={unitsPageHref({ status: "available", q: "", category: "", page: 1 })}
           className={`px-4 py-2 text-sm border-b-2 ${
             tab === "units" ? "border-orange-500 text-white" : "border-transparent text-zinc-400"
           }`}
@@ -381,57 +442,146 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
             </Link>
           </div>
 
+          <form
+            method="get"
+            className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 grid grid-cols-1 md:grid-cols-4 gap-2"
+          >
+            <input type="hidden" name="tab" value="units" />
+            <input type="hidden" name="status" value={activeStatus} />
+            <input type="hidden" name="lokasi" value={scope.activeLocation.slug} />
+            <input
+              name="q"
+              defaultValue={searchQ}
+              placeholder="Cari nama barang / QR Code"
+              className="md:col-span-2 rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
+            />
+            <select
+              name="category"
+              defaultValue={searchCategory}
+              className="rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white"
+            >
+              <option value="">Semua kategori</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="rounded-lg bg-orange-600 hover:bg-orange-500 px-4 py-2 text-sm text-white"
+              >
+                Cari
+              </button>
+              <Link
+                href={unitsPageHref({ q: "", category: "", page: 1 })}
+                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200"
+              >
+                Reset
+              </Link>
+            </div>
+          </form>
+
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden">
             {units.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-zinc-400">
                 Belum ada data unit untuk status ini.
               </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-zinc-900/80 border-b border-zinc-800">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Barang</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Kategori</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">QR Code</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Status</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Kondisi</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">QR</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {units.map((unit) => (
-                      <tr key={unit.id} className="border-b border-zinc-800/80 last:border-0">
-                        <td className="px-4 py-2 text-zinc-100">
-                          <div className="flex items-center gap-2">
-                            <Package className="w-4 h-4 text-zinc-500" />
-                            <span>{unit.item.name}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-2 text-zinc-300">{unit.item.category?.name ?? "-"}</td>
-                        <td className="px-4 py-2 text-zinc-300 font-mono text-xs">{unit.qrCode}</td>
-                        <td className="px-4 py-2">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] ${STATUS_COLOR[unit.status] ?? "bg-zinc-800 text-zinc-200"}`}
-                          >
-                            {unit.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] ${STATUS_COLOR[unit.condition] ?? "bg-zinc-800 text-zinc-200"}`}
-                          >
-                            {unit.condition}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2">
-                          <QrViewerButton qrCode={unit.qrCode} itemName={unit.item.name} />
-                        </td>
+              <>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-zinc-900/80 border-b border-zinc-800">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400 w-12">No</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Barang</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Kategori</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">QR Code</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Status</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Kondisi</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">QR</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {units.map((unit, idx) => (
+                        <tr key={unit.id} className="border-b border-zinc-800/80 last:border-0">
+                          <td className="px-4 py-2 text-zinc-400 text-xs">
+                            {unitStartIndex + idx}
+                          </td>
+                          <td className="px-4 py-2 text-zinc-100">
+                            <div className="flex items-center gap-2">
+                              <Package className="w-4 h-4 text-zinc-500" />
+                              <span>{unit.item.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2 text-zinc-300">{unit.item.category?.name ?? "-"}</td>
+                          <td className="px-4 py-2 text-zinc-300 font-mono text-xs">{unit.qrCode}</td>
+                          <td className="px-4 py-2">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] ${STATUS_COLOR[unit.status] ?? "bg-zinc-800 text-zinc-200"}`}
+                            >
+                              {unit.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2">
+                            <UnitConditionSelect
+                              key={`${unit.id}-${unit.status}-${unit.condition}`}
+                              unitId={unit.id}
+                              initialCondition={
+                                unit.status === "maintenance" ? "maintenance" : unit.condition
+                              }
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <QrViewerButton qrCode={unit.qrCode} itemName={unit.item.name} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-zinc-800 bg-zinc-950/40 text-xs text-zinc-400">
+                  <span>
+                    Menampilkan <strong className="text-zinc-200">{unitStartIndex}–{unitEndIndex}</strong> dari{" "}
+                    <strong className="text-zinc-200">{filteredUnitsCount}</strong> unit
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {currentUnitPage > 1 ? (
+                      <Link
+                        href={unitsPageHref({ page: currentUnitPage - 1 })}
+                        className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 hover:bg-zinc-800 px-3 py-1.5 text-zinc-200"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        Sebelumnya
+                      </Link>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-lg border border-zinc-800 px-3 py-1.5 text-zinc-600 cursor-not-allowed">
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        Sebelumnya
+                      </span>
+                    )}
+                    <span className="px-2 text-zinc-300">
+                      Halaman {currentUnitPage} / {totalUnitPages}
+                    </span>
+                    {currentUnitPage < totalUnitPages ? (
+                      <Link
+                        href={unitsPageHref({ page: currentUnitPage + 1 })}
+                        className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 hover:bg-zinc-800 px-3 py-1.5 text-zinc-200"
+                      >
+                        Berikutnya
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </Link>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-lg border border-zinc-800 px-3 py-1.5 text-zinc-600 cursor-not-allowed">
+                        Berikutnya
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </>
