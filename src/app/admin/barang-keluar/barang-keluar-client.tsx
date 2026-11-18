@@ -46,6 +46,8 @@ export type StaffOption = {
   jabatan: string;
 };
 
+const ROMAN_MONTHS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+
 function generateAutoDocNo(
   dateStr: string,
   typeCode: "M" | "K",
@@ -55,10 +57,6 @@ function generateAutoDocNo(
   const now = new Date();
   const year = Number(parts[0]) || now.getFullYear();
   const month = Number(parts[1]) || now.getMonth() + 1;
-  const day = Number(parts[2]) || now.getDate();
-
-  const mm = String(month).padStart(2, "0");
-  const dd = String(day).padStart(2, "0");
 
   let maxSeq = 0;
   for (const log of existingLogs) {
@@ -73,7 +71,8 @@ function generateAutoDocNo(
   }
 
   const nextSeq = String(maxSeq + 1).padStart(2, "0");
-  return `${nextSeq}/${typeCode}/PL.${mm}.${dd}/I/GDG SAR PDG-${year}`;
+  const romanMonth = ROMAN_MONTHS[month - 1] ?? "I";
+  return `${nextSeq}/${typeCode}/PL.01.02/${romanMonth}/GDG SAR PDG-${year}`;
 }
 
 type DraftOutboundItem = {
@@ -181,12 +180,12 @@ export function BarangKeluarClient({
   const [customSignerName, setCustomSignerName] = useState(
     staffRoster.find((s) => s.jabatan.toLowerCase().includes("gudang"))?.name ||
       staffRoster[0]?.name ||
-      "Rezky Purnama Sarta"
+      ""
   );
   const [customSignerNip, setCustomSignerNip] = useState(
     staffRoster.find((s) => s.jabatan.toLowerCase().includes("gudang"))?.nip ||
       staffRoster[0]?.nip ||
-      "192329303313123"
+      ""
   );
   const [customPengawasName, setCustomPengawasName] = useState(
     DEFAULT_PENGAWAS_GUDANG.name || "ALVIZAN Z., S.H."
@@ -210,28 +209,9 @@ export function BarangKeluarClient({
     return Array.from(setYears).sort((a, b) => b - a);
   }, [logs]);
 
-  // Hitung otomatis displayId berformat BKL-YYYYMMDD-XXXX (reset ke 0001 tiap ganti tanggal)
-  const logsWithDisplayId = useMemo(() => {
-    const dailyTotal = new Map<string, number>();
-    for (const l of logs) {
-      dailyTotal.set(l.date, (dailyTotal.get(l.date) ?? 0) + 1);
-    }
-    const dailySeen = new Map<string, number>();
-    return logs.map((l) => {
-      const seen = dailySeen.get(l.date) ?? 0;
-      const total = dailyTotal.get(l.date) ?? 1;
-      const seq = total - seen;
-      dailySeen.set(l.date, seen + 1);
-      const ymd = (l.date || "").replace(/-/g, "");
-      return {
-        ...l,
-        displayId: `BKL-${ymd}-${String(seq).padStart(4, "0")}`,
-      };
-    });
-  }, [logs]);
-
+  // Filtered logs (displayId persisted in DB as transaction_code)
   const filteredLogs = useMemo(() => {
-    return logsWithDisplayId.filter((log) => {
+    return logs.filter((log) => {
       const d = new Date(log.date);
       const logYear = d.getFullYear();
       const logMonth = d.getMonth() + 1;
@@ -253,7 +233,7 @@ export function BarangKeluarClient({
       }
       return true;
     });
-  }, [logsWithDisplayId, filterYear, filterMonth, search]);
+  }, [logs, filterYear, filterMonth, search]);
 
   const totalFilteredQty = useMemo(() => {
     return filteredLogs.reduce((sum, item) => sum + item.qty, 0);
@@ -646,8 +626,8 @@ export function BarangKeluarClient({
         entry.unitIds.forEach((uid) => formData.append("unitIds", uid));
 
         const res = await submitBarangKeluarAction(formData);
-        if (res.error) {
-          setFeedback({ type: "error", text: res.error });
+        if (res.error || !res.transactionId) {
+          setFeedback({ type: "error", text: res.error || "ID transaksi tidak diterima dari server." });
           return;
         }
 
@@ -655,7 +635,8 @@ export function BarangKeluarClient({
         const processedCodes = res.processedCodes || entry.qrCodes;
 
         newLogsBatch.push({
-          id: processedCodes[0]?.slice(-8) || `NEW-${Date.now()}`,
+          id: res.transactionId,
+          displayId: res.transactionCode,
           date: outDate,
           noRef: noRef || "-",
           itemName: entry.itemName,
@@ -981,7 +962,7 @@ export function BarangKeluarClient({
                   setNoRef(e.target.value);
                   setIsCustomNoRef(true);
                 }}
-                placeholder="01/K/PL.11.10/I/GDG SAR PDG-2026"
+                placeholder="01/K/PL.01.02/I/GDG SAR PDG-2026"
                 className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:ring-2 focus:ring-red-500"
               />
             </div>
@@ -1661,7 +1642,7 @@ export function BarangKeluarClient({
                     className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-red-500"
                   />
                 </div>
-                <div>
+                <div> 
                   <label className="block text-[11px] text-zinc-400 mb-1">NIP Petugas Gudang</label>
                   <input
                     value={customSignerNip}

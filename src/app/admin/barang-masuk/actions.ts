@@ -4,12 +4,14 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import QRCode from "qrcode";
 import { uploadBufferToMinio, MINIO_BUCKETS } from "@/lib/minio";
-import { getNextQrCodes } from "@/lib/inventory";
+import { getNextQrCodes, getNextTransactionCode, syncItemStok } from "@/lib/inventory";
 import { sendPushToLocationAdmins } from "@/lib/push";
 
 export type InboundActionResult = {
   success?: boolean;
   error?: string;
+  transactionId?: string;
+  transactionCode?: string;
   generatedCodes?: string[];
   item?: {
     id: string;
@@ -118,13 +120,16 @@ export async function submitBarangMasukAction(
     }
 
     // Database transaction: Insert item_units & item_transactions
-    await db.$transaction(async (tx) => {
+    const createdTx = await db.$transaction(async (tx) => {
       await tx.itemUnit.createMany({
         data: unitsData,
       });
 
-      await tx.itemTransaction.create({
+      const transactionCode = await getNextTransactionCode("in", txDate, tx);
+
+      const record = await tx.itemTransaction.create({
         data: {
+          transactionCode,
           locationId,
           itemId: targetItem.id,
           type: "in",
@@ -137,13 +142,13 @@ export async function submitBarangMasukAction(
           qrCodes,
           createdAt: txDate,
         },
+        select: { id: true, transactionCode: true },
       });
 
-      // Increment stok
-      await tx.item.update({
-        where: { id: targetItem.id },
-        data: { stok: { increment: quantity } },
-      });
+      // Sinkronkan stok dari jumlah unit aktif sebenarnya
+      await syncItemStok(targetItem.id, tx);
+
+      return record;
     });
 
     revalidatePath("/admin/barang-masuk");
@@ -164,6 +169,8 @@ export async function submitBarangMasukAction(
 
     return {
       success: true,
+      transactionId: createdTx.id,
+      transactionCode: createdTx.transactionCode,
       generatedCodes: qrCodes,
       item: resolvedItem
         ? {

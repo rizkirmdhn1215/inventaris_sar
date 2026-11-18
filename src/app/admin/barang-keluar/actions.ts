@@ -2,11 +2,14 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { getNextTransactionCode, syncItemStok } from "@/lib/inventory";
 import { sendPushToLocationAdmins } from "@/lib/push";
 
 export type OutboundActionResult = {
   success?: boolean;
   error?: string;
+  transactionId?: string;
+  transactionCode?: string;
   processedCodes?: string[];
 };
 
@@ -42,6 +45,7 @@ export async function submitBarangKeluarAction(
     }
 
     let processedQrCodes: string[] = [];
+    let createdTx: { id: string; transactionCode: string };
 
     if (mode === "new") {
       const newItemName = String(formData.get("newItemName") ?? "").trim();
@@ -70,9 +74,9 @@ export async function submitBarangKeluarAction(
         where: { itemId: item.id, status: "available" },
       });
 
-      if (quantity > availableCount || item.stok < quantity) {
+      if (quantity > availableCount) {
         return {
-          error: `Jumlah yang dikeluarkan (${quantity} unit) melebihi stok yang tersedia (${Math.min(availableCount, item.stok)} unit). Stok tidak bisa berkurang melebihi jumlah yang tersedia.`,
+          error: `Jumlah yang dikeluarkan (${quantity} unit) melebihi unit tersedia (${availableCount} unit). Stok tidak bisa berkurang melebihi jumlah yang tersedia.`,
         };
       }
 
@@ -84,7 +88,7 @@ export async function submitBarangKeluarAction(
 
       processedQrCodes = unitsToRetire.map((u) => u.qrCode);
 
-      await db.$transaction(async (tx) => {
+      createdTx = await db.$transaction(async (tx) => {
         await tx.itemUnit.updateMany({
           where: { id: { in: unitsToRetire.map((u) => u.id) } },
           data: {
@@ -93,8 +97,11 @@ export async function submitBarangKeluarAction(
           },
         });
 
-        await tx.itemTransaction.create({
+        const transactionCode = await getNextTransactionCode("out", txDate, tx);
+
+        const record = await tx.itemTransaction.create({
           data: {
+            transactionCode,
             locationId,
             itemId: item.id,
             type: "out",
@@ -107,13 +114,12 @@ export async function submitBarangKeluarAction(
             qrCodes: processedQrCodes,
             createdAt: txDate,
           },
+          select: { id: true, transactionCode: true },
         });
 
-        // Decrement stok
-        await tx.item.update({
-          where: { id: item.id },
-          data: { stok: Math.max(0, item.stok - quantity) },
-        });
+        await syncItemStok(item.id, tx);
+
+        return record;
       });
     } else {
       if (!existingItemId) {
@@ -125,10 +131,9 @@ export async function submitBarangKeluarAction(
         return { error: "Minimal pilih 1 unit fisik (QR Code) yang dikeluarkan." };
       }
 
-      // Pastikan stok tidak bisa berkurang melebihi jumlah yang tersedia
       const itemRecord = await db.item.findUnique({
         where: { id: existingItemId },
-        select: { id: true, name: true, stok: true },
+        select: { id: true, name: true },
       });
 
       if (!itemRecord) {
@@ -139,9 +144,9 @@ export async function submitBarangKeluarAction(
         where: { itemId: existingItemId, status: "available" },
       });
 
-      if (rawUnitIds.length > availableCount || itemRecord.stok < rawUnitIds.length) {
+      if (rawUnitIds.length > availableCount) {
         return {
-          error: `Jumlah unit yang dipilih (${rawUnitIds.length} unit) melebihi stok tersedia (${Math.min(availableCount, itemRecord.stok)} unit). Stok tidak bisa berkurang melebihi jumlah yang tersedia.`,
+          error: `Jumlah unit yang dipilih (${rawUnitIds.length} unit) melebihi unit tersedia (${availableCount} unit). Stok tidak bisa berkurang melebihi jumlah yang tersedia.`,
         };
       }
 
@@ -168,7 +173,7 @@ export async function submitBarangKeluarAction(
 
       processedQrCodes = units.map((u) => u.qrCode);
 
-      await db.$transaction(async (tx) => {
+      createdTx = await db.$transaction(async (tx) => {
         // Update item_units to retired
         await tx.itemUnit.updateMany({
           where: { id: { in: units.map((u) => u.id) } },
@@ -178,9 +183,12 @@ export async function submitBarangKeluarAction(
           },
         });
 
+        const transactionCode = await getNextTransactionCode("out", txDate, tx);
+
         // Insert log transaksi (source = reason, sender = target)
-        await tx.itemTransaction.create({
+        const record = await tx.itemTransaction.create({
           data: {
+            transactionCode,
             locationId,
             itemId: existingItemId,
             type: "out",
@@ -193,13 +201,12 @@ export async function submitBarangKeluarAction(
             qrCodes: processedQrCodes,
             createdAt: txDate,
           },
+          select: { id: true, transactionCode: true },
         });
 
-        // Decrement stok
-        await tx.item.update({
-          where: { id: existingItemId },
-          data: { stok: Math.max(0, itemRecord.stok - units.length) },
-        });
+        await syncItemStok(existingItemId, tx);
+
+        return record;
       });
     }
 
@@ -220,6 +227,8 @@ export async function submitBarangKeluarAction(
 
     return {
       success: true,
+      transactionId: createdTx.id,
+      transactionCode: createdTx.transactionCode,
       processedCodes: processedQrCodes,
     };
   } catch (err) {

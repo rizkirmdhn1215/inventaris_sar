@@ -194,18 +194,19 @@ model ConditionReport {
 
 // ─── Item Transactions (In/Out) ──────────────────────────
 model ItemTransaction {
-  id            String   @id @default(uuid()) @db.Uuid
-  locationId    String   @map("location_id") @db.Uuid
-  itemId        String   @map("item_id") @db.Uuid
-  type          String   // "in" | "out"
-  quantity      Int
-  referenceNo   String?  @map("reference_no")
-  source        String?  // Pengadaan Baru, Donasi, etc
-  notes         String?
-  recipient     String?  // Penerima (staff name)
-  sender        String?  // Pengirim (manual input)
-  qrCodes       String[] @map("qr_codes")
-  createdAt     DateTime @default(now()) @map("created_at")
+  id              String   @id @default(uuid()) @db.Uuid
+  transactionCode String   @unique @map("transaction_code")
+  locationId      String   @map("location_id") @db.Uuid
+  itemId          String   @map("item_id") @db.Uuid
+  type            String   // "in" | "out"
+  quantity        Int
+  referenceNo     String?  @map("reference_no")
+  source          String?  // Pengadaan Baru, Donasi, etc
+  notes           String?
+  recipient       String?  // Penerima (staff name)
+  sender          String?  // Pengirim (manual input)
+  qrCodes         String[] @map("qr_codes")
+  createdAt       DateTime @default(now()) @map("created_at")
 
   item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
 

@@ -19,6 +19,8 @@ const MONTH_NAMES = [
   "Juli", "Agustus", "September", "Oktober", "November", "Desember",
 ];
 
+const ROMAN_MONTHS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+
 async function loadKopImage(): Promise<Buffer | null> {
   const candidates = ["kop-surat.png", "kop-surat.jpg", "kop-surat.jpeg", "logo.png"];
   for (const name of candidates) {
@@ -103,6 +105,7 @@ async function generatePdfResponse({
 
     if (searchParam) {
       where.OR = [
+        { transactionCode: { contains: searchParam, mode: "insensitive" } },
         { item: { name: { contains: searchParam, mode: "insensitive" } } },
         { referenceNo: { contains: searchParam, mode: "insensitive" } },
         { recipient: { contains: searchParam, mode: "insensitive" } },
@@ -158,11 +161,10 @@ async function generatePdfResponse({
   const title = customTitle || `SURAT LAPORAN ${typeText} ${periodLabel.toUpperCase()}`;
   const now = new Date();
   const yearNow = now.getFullYear();
-  const monthNow = String(now.getMonth() + 1).padStart(2, "0");
-  const dayNow = String(now.getDate()).padStart(2, "0");
+  const romanMonth = ROMAN_MONTHS[now.getMonth()] ?? "I";
   const docNumber =
     customDocNumber ||
-    `01/${isIncoming ? "M" : "K"}/PL.${monthNow}.${dayNow}/I/GDG SAR PDG-${yearNow}`;
+    `01/${isIncoming ? "M" : "K"}/PL.01.02/${romanMonth}/GDG SAR PDG-${yearNow}`;
 
   const kopImage = await loadKopImage();
 

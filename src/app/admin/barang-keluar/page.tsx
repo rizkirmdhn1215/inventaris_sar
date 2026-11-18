@@ -60,36 +60,20 @@ export default async function BarangKeluarPage({ searchParams }: PageProps) {
     })),
   }));
 
-  const dailyTotalMap = new Map<string, number>();
-  for (const t of transactions) {
-    const dateKey = t.createdAt.toISOString().slice(0, 10);
-    dailyTotalMap.set(dateKey, (dailyTotalMap.get(dateKey) ?? 0) + 1);
-  }
-  const dailySeenMap = new Map<string, number>();
-
-  const logs = transactions.map((t) => {
-    const dateStr = t.createdAt.toISOString().slice(0, 10);
-    const seen = dailySeenMap.get(dateStr) ?? 0;
-    const totalForDay = dailyTotalMap.get(dateStr) ?? 1;
-    const seq = totalForDay - seen;
-    dailySeenMap.set(dateStr, seen + 1);
-    const ymd = dateStr.replace(/-/g, "");
-
-    return {
-      id: t.id,
-      displayId: `BKL-${ymd}-${String(seq).padStart(4, "0")}`,
-      date: dateStr,
-      noRef: t.referenceNo || "-",
-      itemName: t.item?.name ?? "Barang",
-      category: t.item?.category?.name ?? "-",
-      qty: t.quantity,
-      qrCodes: t.qrCodes,
-      reason: t.source || "Pengeluaran",
-      recipient: t.recipient || "-",
-      target: t.sender || "-",
-      notes: t.notes ?? "",
-    };
-  });
+  const logs = transactions.map((t) => ({
+    id: t.id,
+    displayId: t.transactionCode,
+    date: t.createdAt.toISOString().slice(0, 10),
+    noRef: t.referenceNo || "-",
+    itemName: t.item?.name ?? "Barang",
+    category: t.item?.category?.name ?? "-",
+    qty: t.quantity,
+    qrCodes: t.qrCodes,
+    reason: t.source || "Pengeluaran",
+    recipient: t.recipient || "-",
+    target: t.sender || "-",
+    notes: t.notes ?? "",
+  }));
 
   const staffOptions = STAFF_ROSTER_SEED.map((s) => ({
     nip: s.nip,

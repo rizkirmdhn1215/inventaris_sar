@@ -53,7 +53,7 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
         },
       }),
       db.itemUnit.count({
-        where: { condition: { in: ["damaged", "lost"] }, ...locItemFilter },
+        where: { condition: { in: ["damaged", "lost"] }, status: { not: "retired" }, ...locItemFilter },
       }),
       db.loan.findMany({
         where,

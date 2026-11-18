@@ -1,6 +1,13 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 
-export type UnitStatus = "available" | "borrowed" | "maintenance" | "retired";
+export type UnitStatus =
+  | "available"
+  | "borrowed"
+  | "maintenance"
+  | "damaged"
+  | "lost"
+  | "retired";
 
 /** Units counted in master inventory (excludes retired; history preserved in DB). */
 export const activeUnitWhere = { status: { not: "retired" as const } };
@@ -51,6 +58,43 @@ export async function getNextQrCodes(itemId: string, itemName: string, count: nu
   });
 }
 
+/** Generate persistent BMS-YYYYMMDD-XXXX / BKL-YYYYMMDD-XXXX code safely inside a transaction. */
+export async function getNextTransactionCode(
+  type: "in" | "out",
+  txDate: Date,
+  client: Prisma.TransactionClient | typeof db = db
+) {
+  const ymd = txDate.toISOString().slice(0, 10).replace(/-/g, "");
+  const prefix = `${type === "in" ? "BMS" : "BKL"}-${ymd}-`;
+
+  // ponytail: advisory lock + 4-digit lexical sort holds up to 9,999 tx/day; switch to DB sequence if exceeded
+  await client.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${prefix}))`;
+
+  const last = await client.itemTransaction.findFirst({
+    where: { transactionCode: { startsWith: prefix } },
+    orderBy: { transactionCode: "desc" },
+    select: { transactionCode: true },
+  });
+
+  const lastNumber = last ? Number(last.transactionCode.slice(prefix.length)) || 0 : 0;
+  return `${prefix}${String(lastNumber + 1).padStart(4, "0")}`;
+}
+
+/** Sync items.stok with the authoritative count of active (non-retired) item_units. */
+export async function syncItemStok(
+  itemId: string,
+  client: Prisma.TransactionClient | typeof db = db
+) {
+  const activeCount = await client.itemUnit.count({
+    where: { itemId, ...activeUnitWhere },
+  });
+  await client.item.update({
+    where: { id: itemId },
+    data: { stok: activeCount },
+  });
+  return activeCount;
+}
+
 /**
  * Set active unit count (retired units are excluded from total but kept for loan history).
  */
@@ -71,17 +115,23 @@ export async function adjustItemUnitCount(itemId: string, targetCount: number) {
   });
 
   const current = units.length;
-  if (targetCount === current) return;
+  if (targetCount === current) {
+    await syncItemStok(item.id);
+    return;
+  }
 
   if (targetCount > current) {
     const toAdd = targetCount - current;
     const qrCodes = await getNextQrCodes(item.id, item.name, toAdd);
-    await db.itemUnit.createMany({
-      data: qrCodes.map((qrCode) => ({
-        itemId: item.id,
-        qrCode,
-        status: "available",
-      })),
+    await db.$transaction(async (tx) => {
+      await tx.itemUnit.createMany({
+        data: qrCodes.map((qrCode) => ({
+          itemId: item.id,
+          qrCode,
+          status: "available",
+        })),
+      });
+      await syncItemStok(item.id, tx);
     });
     return;
   }
@@ -108,9 +158,12 @@ export async function adjustItemUnitCount(itemId: string, targetCount: number) {
     })
     .slice(0, needRemove);
 
-  await db.itemUnit.updateMany({
-    where: { id: { in: toRetire.map((u) => u.id) } },
-    data: { status: "retired" },
+  await db.$transaction(async (tx) => {
+    await tx.itemUnit.updateMany({
+      where: { id: { in: toRetire.map((u) => u.id) } },
+      data: { status: "retired" },
+    });
+    await syncItemStok(item.id, tx);
   });
 }
 

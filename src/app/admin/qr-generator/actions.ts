@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import QRCode from "qrcode";
 import { uploadBufferToMinio } from "@/lib/minio";
+import { syncItemStok } from "@/lib/inventory";
 
 type QrResultItem = {
   itemName: string;
@@ -152,12 +153,15 @@ export async function generateQrAction(
       }
     }
 
-    await db.itemUnit.createMany({
-      data: unitsToCreate.map((unit) => ({
-        itemId: unit.itemId,
-        qrCode: unit.qrCode,
-        notes: JSON.stringify({ qrImagePath: unit.qrImagePath }),
-      })),
+    await db.$transaction(async (tx) => {
+      await tx.itemUnit.createMany({
+        data: unitsToCreate.map((unit) => ({
+          itemId: unit.itemId,
+          qrCode: unit.qrCode,
+          notes: JSON.stringify({ qrImagePath: unit.qrImagePath }),
+        })),
+      });
+      await syncItemStok(item.id, tx);
     });
     generated.push(
       ...unitsToCreate.map((unit) => ({

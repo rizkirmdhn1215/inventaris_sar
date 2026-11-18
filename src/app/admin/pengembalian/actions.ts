@@ -107,7 +107,7 @@ export async function submitReturnAction(formData: FormData) {
       await tx.itemUnit.update({
         where: { id: report.itemUnitId },
         data: {
-          status: "available",
+          status: report.conditionResult === "good" ? "available" : report.conditionResult,
           condition: report.conditionResult,
         },
       });
@@ -120,6 +120,8 @@ export async function submitReturnAction(formData: FormData) {
   });
 
   revalidatePath("/admin/pengembalian");
+  revalidatePath("/admin/barang");
+  revalidatePath("/admin/dashboard");
   
   // Send push notification for return processed
   const returnedLoan = await db.loan.findUnique({

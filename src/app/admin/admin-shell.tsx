@@ -180,7 +180,7 @@ export function AdminShell({
               if ("superOnly" in item && item.superOnly && !isSuperAdmin) return null;
               if ("kppOnly" in item && item.kppOnly && !isKpp) return null;
               const Icon = item.icon;
-              const isActive = pathname.startsWith(item.href);
+              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
                 <Link
                   key={item.href}
@@ -232,7 +232,7 @@ export function AdminShell({
                 if ("superOnly" in item && item.superOnly && !isSuperAdmin) return null;
                 if ("kppOnly" in item && item.kppOnly && !isKpp) return null;
                 const Icon = item.icon;
-                const isActive = pathname.startsWith(item.href);
+                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
                 return (
                   <Link
                     key={item.href}
