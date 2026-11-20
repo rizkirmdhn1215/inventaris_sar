@@ -9,12 +9,18 @@ type QrViewerButtonProps = {
   itemName: string;
 };
 
-export function QrViewerButton({ qrCode, itemName }: QrViewerButtonProps) {
-  const [open, setOpen] = useState(false);
+export function QrDialog({
+  qrCode,
+  itemName,
+  onClose,
+}: {
+  qrCode: string;
+  itemName: string;
+  onClose: () => void;
+}) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
     let cancelled = false;
     QRCode.toDataURL(qrCode, { width: 320, margin: 1 }).then((url) => {
       if (!cancelled) setDataUrl(url);
@@ -22,17 +28,15 @@ export function QrViewerButton({ qrCode, itemName }: QrViewerButtonProps) {
     return () => {
       cancelled = true;
     };
-  }, [open, qrCode]);
+  }, [qrCode]);
 
-  // Close on Escape
   useEffect(() => {
-    if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open]);
+  }, [onClose]);
 
   function printQr() {
     if (!dataUrl) return;
@@ -58,6 +62,69 @@ export function QrViewerButton({ qrCode, itemName }: QrViewerButtonProps) {
   }
 
   return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="relative bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm text-center"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-3 right-3 text-zinc-400 hover:text-white"
+          aria-label="Tutup"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        <h3 className="text-sm font-semibold text-white mb-1">{itemName}</h3>
+        <p className="text-xs text-zinc-400 font-mono mb-4">{qrCode}</p>
+
+        <div className="bg-white rounded-xl p-4 inline-block">
+          {dataUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={dataUrl}
+              alt={qrCode}
+              className="w-[240px] h-[240px] mx-auto block"
+            />
+          ) : (
+            <div className="w-[240px] h-[240px] bg-zinc-200 animate-pulse" />
+          )}
+        </div>
+
+        <div className="flex gap-2 mt-4">
+          <a
+            href={dataUrl ?? "#"}
+            download={`${qrCode}.png`}
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-700 hover:border-zinc-600 px-3 py-2 text-xs text-zinc-100 ${
+              dataUrl ? "" : "pointer-events-none opacity-50"
+            }`}
+          >
+            <Download className="w-3.5 h-3.5" />
+            Download
+          </a>
+          <button
+            type="button"
+            onClick={printQr}
+            disabled={!dataUrl}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 disabled:opacity-50 px-3 py-2 text-xs text-white"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            Print
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function QrViewerButton({ qrCode, itemName }: QrViewerButtonProps) {
+  const [open, setOpen] = useState(false);
+
+  return (
     <>
       <button
         type="button"
@@ -68,62 +135,7 @@ export function QrViewerButton({ qrCode, itemName }: QrViewerButtonProps) {
       </button>
 
       {open ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="relative bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm text-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="absolute top-3 right-3 text-zinc-400 hover:text-white"
-              aria-label="Tutup"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <h3 className="text-sm font-semibold text-white mb-1">{itemName}</h3>
-            <p className="text-xs text-zinc-400 font-mono mb-4">{qrCode}</p>
-
-            <div className="bg-white rounded-xl p-4 inline-block">
-              {dataUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={dataUrl}
-                  alt={qrCode}
-                  className="w-[240px] h-[240px] mx-auto block"
-                />
-              ) : (
-                <div className="w-[240px] h-[240px] bg-zinc-200 animate-pulse" />
-              )}
-            </div>
-
-            <div className="flex gap-2 mt-4">
-              <a
-                href={dataUrl ?? "#"}
-                download={`${qrCode}.png`}
-                className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-700 hover:border-zinc-600 px-3 py-2 text-xs text-zinc-100 ${
-                  dataUrl ? "" : "pointer-events-none opacity-50"
-                }`}
-              >
-                <Download className="w-3.5 h-3.5" />
-                Download
-              </a>
-              <button
-                type="button"
-                onClick={printQr}
-                disabled={!dataUrl}
-                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 disabled:opacity-50 px-3 py-2 text-xs text-white"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                Print
-              </button>
-            </div>
-          </div>
-        </div>
+        <QrDialog qrCode={qrCode} itemName={itemName} onClose={() => setOpen(false)} />
       ) : null}
     </>
   );

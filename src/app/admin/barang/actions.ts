@@ -143,3 +143,64 @@ export async function updateUnitConditionAction(
   }
 }
 
+export async function updateUnitDetailsAction(
+  formData: FormData
+): Promise<InventoryActionResult> {
+  const unitId = String(formData.get("unitId") ?? "").trim();
+  const condition = String(formData.get("condition") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  if (!unitId) return { error: "ID unit tidak valid." };
+
+  try {
+    const unit = await db.itemUnit.findUnique({
+      where: { id: unitId },
+      select: { status: true, condition: true },
+    });
+    if (!unit) return { error: "Unit tidak ditemukan." };
+
+    let nextStatus = unit.status;
+    let nextCondition = condition || unit.condition;
+
+    if (condition === "maintenance") {
+      if (unit.status === "borrowed") {
+        return {
+          error: "Unit sedang dipinjam. Kembalikan terlebih dahulu sebelum masuk maintenance.",
+        };
+      }
+      nextStatus = "maintenance";
+      nextCondition = "good";
+    } else if (condition === "good") {
+      if (unit.status !== "borrowed" && unit.status !== "retired") {
+        nextStatus = "available";
+      }
+      nextCondition = "good";
+    } else if (condition === "damaged" || condition === "lost") {
+      if (unit.status !== "borrowed" && unit.status !== "retired") {
+        nextStatus = condition;
+      }
+      nextCondition = condition;
+    }
+
+    await db.itemUnit.update({
+      where: { id: unitId },
+      data: {
+        condition: nextCondition,
+        status: nextStatus,
+        notes: notes || null,
+      },
+    });
+
+    try {
+      revalidatePath("/admin/barang");
+      revalidatePath("/admin/dashboard");
+      revalidatePath("/admin/barang-keluar");
+    } catch {
+      // safe fallback if called outside request context
+    }
+    return { success: "Detail unit berhasil disimpan." };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+

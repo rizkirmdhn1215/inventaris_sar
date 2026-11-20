@@ -13,9 +13,8 @@ import {
 } from "lucide-react";
 import { upsertItemAction } from "./actions";
 import { STATUS_COLOR } from "@/lib/format";
-import { QrViewerButton } from "./qr-viewer";
 import { EditableItemRow } from "./editable-row";
-import { UnitConditionSelect } from "./unit-condition-select";
+import { UnitsTable } from "./units-table";
 import { requireAdminPageScope } from "@/lib/admin-page";
 
 const UNITS_PER_PAGE = 50;
@@ -106,17 +105,19 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
     }),
     db.itemUnit.count({ where: { status: "maintenance", item: { locationId: locId } } }),
     tab === "units" ? db.itemUnit.count({ where: unitsWhere }) : Promise.resolve(0),
-    db.item.findMany({
-      where: masterWhere,
-      include: {
-        category: true,
-        units: {
-          where: { status: { not: "retired" } },
-          select: { id: true, status: true },
-        },
-      },
-      orderBy: { name: "asc" },
-    }),
+    tab === "master"
+      ? db.item.findMany({
+          where: masterWhere,
+          include: {
+            category: true,
+            units: {
+              where: { status: { not: "retired" } },
+              select: { status: true },
+            },
+          },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
     db.itemCategory.findMany({
       where: { locationId: locId },
       orderBy: { name: "asc" },
@@ -130,7 +131,26 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
     tab === "units"
       ? await db.itemUnit.findMany({
           where: unitsWhere,
-          include: { item: { include: { category: true } } },
+          include: {
+            item: { include: { category: true } },
+            conditionReports: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              include: {
+                returnCheck: {
+                  include: {
+                    loan: {
+                      select: {
+                        borrowerName: true,
+                        borrowerDivision: true,
+                        purpose: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
           orderBy: [{ createdAt: "desc" }, { qrCode: "asc" }],
           skip: (currentUnitPage - 1) * UNITS_PER_PAGE,
           take: UNITS_PER_PAGE,
@@ -490,57 +510,7 @@ export default async function BarangPage({ searchParams }: BarangPageProps) {
               </p>
             ) : (
               <>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-zinc-900/80 border-b border-zinc-800">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400 w-12">No</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Barang</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Kategori</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">QR Code</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Status</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">Kondisi</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400">QR</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {units.map((unit, idx) => (
-                        <tr key={unit.id} className="border-b border-zinc-800/80 last:border-0">
-                          <td className="px-4 py-2 text-zinc-400 text-xs">
-                            {unitStartIndex + idx}
-                          </td>
-                          <td className="px-4 py-2 text-zinc-100">
-                            <div className="flex items-center gap-2">
-                              <Package className="w-4 h-4 text-zinc-500" />
-                              <span>{unit.item.name}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-2 text-zinc-300">{unit.item.category?.name ?? "-"}</td>
-                          <td className="px-4 py-2 text-zinc-300 font-mono text-xs">{unit.qrCode}</td>
-                          <td className="px-4 py-2">
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] ${STATUS_COLOR[unit.status] ?? "bg-zinc-800 text-zinc-200"}`}
-                            >
-                              {unit.status}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2">
-                            <UnitConditionSelect
-                              key={`${unit.id}-${unit.status}-${unit.condition}`}
-                              unitId={unit.id}
-                              initialCondition={
-                                unit.status === "maintenance" ? "maintenance" : unit.condition
-                              }
-                            />
-                          </td>
-                          <td className="px-4 py-2">
-                            <QrViewerButton qrCode={unit.qrCode} itemName={unit.item.name} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <UnitsTable units={units} startIndex={unitStartIndex} />
 
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-zinc-800 bg-zinc-950/40 text-xs text-zinc-400">
                   <span>

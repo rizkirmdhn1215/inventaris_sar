@@ -3,8 +3,6 @@
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { renderToBuffer } from "@react-pdf/renderer";
-import { SuratPeminjamanDocument } from "@/components/pdf/surat-peminjaman";
 import { uploadBufferToMinio } from "@/lib/minio";
 import { DEFAULT_PENGAWAS_GUDANG } from "@/lib/gudang-signatories";
 import { groupLoanItemsForPdf } from "@/lib/inventory";
@@ -74,6 +72,10 @@ export async function approveLoanAction(formData: FormData) {
   // Generate PDF
   let documentUrl: string | null = null;
   try {
+    const [{ renderToBuffer }, { SuratPeminjamanDocument }] = await Promise.all([
+      import("@react-pdf/renderer"),
+      import("@/components/pdf/surat-peminjaman"),
+    ]);
     const pdfGroupedItems = groupLoanItemsForPdf(sortedItems);
     const pdfBuffer = await renderToBuffer(
       SuratPeminjamanDocument({
